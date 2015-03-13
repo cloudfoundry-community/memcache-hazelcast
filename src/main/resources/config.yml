@@ -1,0 +1,6 @@
+---
+# Excluding scheme will default to https
+pidfile: /tmp/gateway.pid
+
+logging:
+  level: INFO
