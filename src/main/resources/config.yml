@@ -4,3 +4,4 @@ pidfile: /tmp/gateway.pid
 
 logging:
   level: INFO
+
