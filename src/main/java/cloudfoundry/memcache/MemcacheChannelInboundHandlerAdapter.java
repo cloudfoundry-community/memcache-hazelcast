@@ -9,19 +9,23 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.util.ReferenceCountUtil;
 
-public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerAdapter {
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-	private MemcacheMsgHandlerFactory msgHandlerFactory;
+public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerAdapter {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheChannelInboundHandlerAdapter.class);
+
+	private final MemcacheMsgHandlerFactory msgHandlerFactory;
 
 	private byte optcode = -1;
 	private MemcacheMsgHandler currentMsgHandler;
-	private AuthMsgHandler authMsgHandler;
-	private boolean authRequired;
+	private final AuthMsgHandler authMsgHandler;
 
-	public MemcacheChannelInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, boolean authRequired) {
+	public MemcacheChannelInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler) {
 		super();
 		this.msgHandlerFactory = msgHandlerFactory;
-		this.authRequired = authRequired;
+		this.authMsgHandler = authMsgHandler;
 	}
 
 	@Override
@@ -118,16 +122,16 @@ public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerA
 				}
 				break;
 			case BinaryMemcacheOpcodes.APPEND:
-				System.out.println("Failed to handle request with optcode: "+optcode);
-				break;
 			case BinaryMemcacheOpcodes.APPENDQ:
-				System.out.println("Failed to handle request with optcode: "+optcode);
+				if(!(msg instanceof BinaryMemcacheRequest ? currentMsgHandler.append(ctx, (BinaryMemcacheRequest)msg) : currentMsgHandler.append(ctx, (MemcacheContent)msg))) {
+					clearRequest();
+				}
 				break;
 			case BinaryMemcacheOpcodes.PREPEND:
-				System.out.println("Failed to handle request with optcode: "+optcode);
-				break;
 			case BinaryMemcacheOpcodes.PREPENDQ:
-				System.out.println("Failed to handle request with optcode: "+optcode);
+				if(!(msg instanceof BinaryMemcacheRequest ? currentMsgHandler.prepend(ctx, (BinaryMemcacheRequest)msg) : currentMsgHandler.prepend(ctx, (MemcacheContent)msg))) {
+					clearRequest();
+				}
 				break;
 			case BinaryMemcacheOpcodes.STAT:
 				if(!currentMsgHandler.stat(ctx, (BinaryMemcacheRequest)msg)) {
@@ -135,13 +139,21 @@ public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerA
 				}
 				break;
 			case BinaryMemcacheOpcodes.TOUCH:
-				System.out.println("Failed to handle request with optcode: "+optcode);
+				if(!currentMsgHandler.touch(ctx, (BinaryMemcacheRequest)msg)) {
+					clearRequest();
+				}
 				break;
 			case BinaryMemcacheOpcodes.GAT:
-				System.out.println("Failed to handle request with optcode: "+optcode);
-				break;
 			case BinaryMemcacheOpcodes.GATQ:
-				System.out.println("Failed to handle request with optcode: "+optcode);
+				if(!currentMsgHandler.gat(ctx, (BinaryMemcacheRequest)msg)) {
+					clearRequest();
+				}
+				break;
+			case BinaryMemcacheOpcodes.GATK:
+			case BinaryMemcacheOpcodes.GATKQ:
+				if(!currentMsgHandler.gat(ctx, (BinaryMemcacheRequest)msg)) {
+					clearRequest();
+				}
 				break;
 			case BinaryMemcacheOpcodes.SASL_LIST_MECHS:
 				if(!getAuthMsgHandler().listMechs(ctx, (BinaryMemcacheRequest)msg)) {
@@ -163,7 +175,7 @@ public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerA
 				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "We don't support any auth mechanisms that require a step.").send(ctx);
 				break;
 			default:
-				System.out.println("Failed to handle request with optcode: "+optcode);
+				LOGGER.info("Failed to handle request with optcode: "+optcode);
 				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(optcode)).send(ctx);
 			}
 		} finally {
@@ -172,13 +184,13 @@ public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerA
 	}
 	
 	private AuthMsgHandler getAuthMsgHandler() {
-		if(authMsgHandler == null) {
-			if(authRequired) {
-				authMsgHandler = new PlainAuthMsgHandler();
-			} else {
-				authMsgHandler = new StubAuthMsgHandler("StubUser");
-			}
-		}
+//		if(authMsgHandler == null) {
+//			if(authRequired) {
+//				authMsgHandler = new PlainAuthMsgHandler();
+//			} else {
+//				authMsgHandler = new StubAuthMsgHandler("StubUser");
+//			}
+//		}
 		return authMsgHandler;
 	}
 	

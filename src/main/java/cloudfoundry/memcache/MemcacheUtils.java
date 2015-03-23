@@ -10,7 +10,12 @@ import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class MemcacheUtils {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheUtils.class);
 
 	public static ResponseSender returnFailure(BinaryMemcacheRequest request, short errorCode, String message) {
 		return returnFailure(request.opcode(), request.opaque(), errorCode, message);
@@ -61,15 +66,17 @@ public class MemcacheUtils {
 	}
 
 	public static void logRequest(BinaryMemcacheRequest request) {
-		System.out.println("Opcode: "+request.opcode());
-		System.out.println("Key Length: "+request.keyLength());
-		System.out.println("Key: "+request.key());
-		System.out.println("CAS: "+request.cas());
-		System.out.println("Magic: "+request.magic());
-		System.out.println("Reserved: "+request.reserved());
-		System.out.println("Opaque: "+request.opaque());
-		System.out.println("Extras Length: "+request.extrasLength());
-		System.out.println("Body Length: "+request.totalBodyLength());
+		if(LOGGER.isDebugEnabled()) {
+    		LOGGER.debug("Opcode: "+request.opcode());
+    		LOGGER.debug("Key Length: "+request.keyLength());
+    		LOGGER.debug("Key: "+request.key());
+    		LOGGER.debug("CAS: "+request.cas());
+    		LOGGER.debug("Magic: "+request.magic());
+    		LOGGER.debug("Reserved: "+request.reserved());
+    		LOGGER.debug("Opaque: "+request.opaque());
+    		LOGGER.debug("Extras Length: "+request.extrasLength());
+    		LOGGER.debug("Body Length: "+request.totalBodyLength());
+		}
 	}
 	
 	public static String extractSaslUsername(byte[] auth) {

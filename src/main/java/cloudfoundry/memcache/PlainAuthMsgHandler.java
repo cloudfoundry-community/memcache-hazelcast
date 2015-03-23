@@ -63,8 +63,6 @@ public class PlainAuthMsgHandler implements AuthMsgHandler {
 		content.content().readBytes(arrayContent);
 		username = MemcacheUtils.extractSaslUsername(arrayContent);
 		String password = MemcacheUtils.extractSaslPassword(arrayContent);
-		System.out.println("Username: "+username);
-		System.out.println("Password: "+password);
 		authenticated = true;
 		BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
 		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);

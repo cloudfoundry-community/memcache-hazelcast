@@ -12,6 +12,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
 import com.hazelcast.config.Config;
 
@@ -31,7 +32,7 @@ public class Main {
 	@Bean
 	MemcacheServer memcacheServer(MemcacheMsgHandlerFactory handlerFactory) {
 		System.out.println("Localport: "+54913);
-		MemcacheServer server = new MemcacheServer(handlerFactory, 54913);
+		MemcacheServer server = new MemcacheServer(handlerFactory, 54913, new StubAuthMsgHandlerFactory());
 		return server;
 	}
 

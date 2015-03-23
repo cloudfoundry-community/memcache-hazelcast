@@ -6,36 +6,82 @@ import cloudfoundry.memcache.MemcacheUtils;
 
 
 public class HazelcastMemcacheCacheValue {
-	private static final int FLAG_LENGTH_OFFSET = 0;
+	private static final int FLAG_LENGTH_OFFSET = 1;
+	private static final int EXPIRATION_LENGTH_OFFSET = 0;
 	private static final int FLAG_LENGTH_LENGTH = 1;
-	private static final int FLAG_OFFSET = FLAG_LENGTH_OFFSET+1;
+	private static final int EXPIRATION_LENGTH_LENGTH = 1;
+	private static final int EXPIRATION_LENGTH = 4;
 	private final ByteBuf cacheEntry;
 
-	public HazelcastMemcacheCacheValue(int valueLength, int flagLength) {
-		cacheEntry = Unpooled.buffer(valueLength+flagLength+FLAG_LENGTH_LENGTH);
+	public HazelcastMemcacheCacheValue(int valueLength, ByteBuf flags, long expiration) {
+		int expirationLength = deriveExpirationLength(expiration);
+		int flagLength = deriveFlagLength(flags);
+		cacheEntry = Unpooled.buffer(valueLength+flagLength+FLAG_LENGTH_LENGTH+EXPIRATION_LENGTH_LENGTH+expirationLength);
+		setExpiration(expiration);
+		setFlags(flags);
+		cacheEntry.writerIndex(getValueOffset());
+	}
+
+	private int deriveFlagLength(ByteBuf flags) {
+		return flags.capacity();
+	}
+
+	private int deriveExpirationLength(long expiration) {
+		return expiration == 0 ? 0 : EXPIRATION_LENGTH;
 	}
 
 	public HazelcastMemcacheCacheValue(byte[] cacheEntry) {
 		this.cacheEntry = Unpooled.wrappedBuffer(cacheEntry);
 	}
-	
-	public void setFlags(ByteBuf flags) {
+
+	private void setFlags(ByteBuf flags) {
 		cacheEntry.writerIndex(FLAG_LENGTH_OFFSET);
-		cacheEntry.writeByte(flags.capacity());
+		cacheEntry.writeByte(deriveFlagLength(flags));
+		cacheEntry.writerIndex(getFlagOffset());
 		cacheEntry.writeBytes(flags);
 	}
 	
-	public void setValue(ByteBuf value) {
-		cacheEntry.writerIndex(getValueOffset());
+	public int getExpirationLength() {
+		return cacheEntry.getByte(EXPIRATION_LENGTH_OFFSET);
+	}
+
+	private void setExpiration(long expiration) {
+		cacheEntry.writerIndex(EXPIRATION_LENGTH_OFFSET);
+		if(expiration != 0) {
+    		cacheEntry.writeByte(EXPIRATION_LENGTH);
+    		cacheEntry.writerIndex(getExpirationOffset());
+    		cacheEntry.writeInt((int)expiration);
+		} else {
+			cacheEntry.writeByte(0);
+		}
+	}
+	
+	public long getExpiration() {
+		if(getExpirationLength() != 0) {
+			cacheEntry.readerIndex(getExpirationOffset());
+			return cacheEntry.readUnsignedInt();
+		}
+		return 0;
+	}
+
+	public int getExpirationOffset() {
+		return FLAG_LENGTH_LENGTH+EXPIRATION_LENGTH_LENGTH;
+	}
+	
+	public int getFlagOffset() {
+		return FLAG_LENGTH_LENGTH+EXPIRATION_LENGTH_LENGTH+getExpirationLength();
+	}
+
+	public byte getFlagLength() {
+		return cacheEntry.getByte(FLAG_LENGTH_OFFSET);
+	}
+	
+	public void writeValue(ByteBuf value) {
 		cacheEntry.writeBytes(value);
 	}
 	
-	public void setMoreValue(ByteBuf value) {
-		cacheEntry.writeBytes(value);
-	}
-
 	public ByteBuf getFlags() {
-		return cacheEntry.slice(FLAG_LENGTH_LENGTH, getFlagLength());
+		return cacheEntry.slice(getFlagOffset(), getFlagLength());
 	}
 	
 	public ByteBuf getValue() {
@@ -43,28 +89,22 @@ public class HazelcastMemcacheCacheValue {
 	}
 	
 	public int getValueLength() {
-		return cacheEntry.capacity()-(getFlagLength()+FLAG_LENGTH_LENGTH);
+		return cacheEntry.capacity()-getValueOffset();
 	}
 	
 	public int getValueOffset() {
-		return getFlagLength()+FLAG_LENGTH_LENGTH;
+		return getFlagLength()+FLAG_LENGTH_LENGTH+EXPIRATION_LENGTH_LENGTH+getExpirationLength();
 	}
 
-	public byte getFlagLength() {
-		return cacheEntry.getByte(FLAG_LENGTH_OFFSET);
-	}
-	
 	public int getTotalFlagsAndValueLength() {
-		return cacheEntry.capacity()-FLAG_LENGTH_LENGTH;
+		return getValueLength()+getFlagLength();
 	}
 	
 	public byte[] getCacheEntry() {
 		return cacheEntry.array();
 	}
 	
-	public long getCAS(String key) {
-		byte[] bytes = key.getBytes();
-		long seed = MemcacheUtils.hash64(bytes, 0, bytes.length, 0);
-		return MemcacheUtils.hash64(getCacheEntry(), FLAG_OFFSET, getCacheEntry().length, seed);
+	public long getCAS() {
+		return MemcacheUtils.hash64(getCacheEntry(), getValueOffset(), getValueLength(), 0);
 	}
 }

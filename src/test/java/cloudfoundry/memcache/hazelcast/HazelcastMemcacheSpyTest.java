@@ -1,5 +1,6 @@
 package cloudfoundry.memcache.hazelcast;
 
+import java.net.ServerSocket;
 import java.util.Random;
 
 import net.spy.memcached.AddrUtil;
@@ -16,6 +17,7 @@ import org.testng.annotations.Test;
 
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
 import com.hazelcast.config.Config;
 
@@ -32,12 +34,12 @@ public class HazelcastMemcacheSpyTest {
 		
 		
 		int localPort = 54913;
-/*		try (ServerSocket s = new ServerSocket(0)) {
+		try (ServerSocket s = new ServerSocket(0)) {
 			localPort = s.getLocalPort();
 		}
-*/
+
 		System.out.println("Localport: "+localPort);
-		server = new MemcacheServer(factory, localPort);
+		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory());
 		server.start();
 
 		ConnectionFactoryBuilder binaryConnectionFactory = new ConnectionFactoryBuilder();
@@ -61,15 +63,15 @@ public class HazelcastMemcacheSpyTest {
 
 	@Test
 	public void getBasic() throws Exception {
-		Assert.assertNull(c.get("nothingHere"));
-		c.set("someKey", 0, "Some Data!");
-		Assert.assertEquals(c.get("someKey"), "Some Data!");
+		Assert.assertNull(c.get("nothingHereGet"));
+		c.set("nothingHereGet", 0, "Some Data!");
+		Assert.assertEquals(c.get("nothingHereGet"), "Some Data!");
 	}
 
 	@Test
 	public void setBasic() throws Exception {
-		c.set("someKey", 0, "Some Data!").get();
-		Assert.assertEquals(c.get("someKey"), "Some Data!");
+		c.set("someKey", 0, "Some Data Set!").get();
+		Assert.assertEquals(c.get("someKey"), "Some Data Set!");
 	}
 	
 	@Test
@@ -79,12 +81,8 @@ public class HazelcastMemcacheSpyTest {
 		c.set("someKey", 1, "Some Data!").get();
 		Object value = c.get("someKey");
 		Assert.assertNotNull(value);
-		while(System.currentTimeMillis() < expireTime+10000 && value != null) {
-			value = c.get("someKey");
-			System.out.println("Got Value");
-			Thread.sleep(250);
-		}
-		Assert.assertNull(value);
+		Thread.sleep(2000);
+		Assert.assertNull(c.get("someKey"));
 	}
 
 	@Test
@@ -104,5 +102,29 @@ public class HazelcastMemcacheSpyTest {
 		} catch(Exception e) {
 			//success
 		}
+	}
+	
+	@Test
+	public void touchBasic() throws Exception {
+		Assert.assertNull(c.get("nothingHere"));
+		c.set("nothingHere", 4, "Some Data!");
+		Thread.sleep(3000);
+		c.touch("nothingHere", 4);
+		Thread.sleep(3000);
+		Assert.assertEquals(c.get("nothingHere"), "Some Data!");
+		Thread.sleep(3000);
+		Assert.assertNull(c.get("nothingHere"));
+	}
+
+	@Test
+	public void gatBasic() throws Exception {
+		Assert.assertNull(c.get("nothingHere2"));
+		c.set("nothingHere2", 4, "Some Data!");
+		Thread.sleep(3000);
+		Assert.assertEquals(c.getAndTouch("nothingHere2", 4).getValue(), "Some Data!");
+		Thread.sleep(3000);
+		Assert.assertEquals(c.get("nothingHere2"), "Some Data!");
+		Thread.sleep(3000);
+		Assert.assertNull(c.get("nothingHere2"));
 	}
 }

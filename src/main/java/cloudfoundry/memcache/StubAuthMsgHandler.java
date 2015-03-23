@@ -53,7 +53,6 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 		byte[] arrayContent = new byte[content.content().capacity()];
 		content.content().readBytes(arrayContent);
 		username = MemcacheUtils.extractSaslUsername(arrayContent);
-		System.out.println("Username: "+username);
 		BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
 		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 		response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
