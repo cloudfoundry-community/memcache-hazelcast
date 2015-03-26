@@ -53,12 +53,16 @@
 					<artifactId>cf-component</artifactId>
 					<groupId>com.github.cloudfoundry-community</groupId>
 				</exclusion>
+				<exclusion>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-starter-web</artifactId>
+				</exclusion>
 			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>com.hazelcast</groupId>
 			<artifactId>hazelcast</artifactId>
-			<version>3.4.1</version>
+			<version>3.4.2</version>
 		</dependency>
 		<dependency>
 			<groupId>io.netty</groupId>
@@ -94,6 +98,16 @@
 			<artifactId>testng</artifactId>
 			<version>6.8.21</version>
 			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.easymock</groupId>
+			<artifactId>easymock</artifactId>
+			<version>3.3.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.data</groupId>
+			<artifactId>spring-data-commons</artifactId>
+			<version>1.7.2.RELEASE</version>
 		</dependency>
 	</dependencies>
 </project>

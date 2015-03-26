@@ -5,3 +5,40 @@ pidfile: /tmp/gateway.pid
 logging:
   level: INFO
 
+memcached:
+  port: 54913
+
+hazelcast:
+  port: 5701
+  machines:
+    pz1:
+    - 127.0.0.1
+
+plans:
+  small:
+    backup: 0
+    async_backup: 0
+    eviction_policy: LRU
+    max_idle_seconds: 86400
+    max_size_used_heap: 100
+  medium:
+    backup: 0
+    async_backup: 1
+    eviction_policy: LRU
+    max_idle_seconds: 86400
+    max_size_used_heap: 100
+  large:
+    backup: 0
+    async_backup: 1
+    eviction_policy: LRU
+    max_idle_seconds: 86400
+    max_size_used_heap: 1000
+  darren:
+    backup: 0
+    async_backup: 1
+    eviction_policy: LRU
+    time_to_live: 86400
+    max_size_used_heap: 1000
+
+auth:
+  secret_key: some_secret_key

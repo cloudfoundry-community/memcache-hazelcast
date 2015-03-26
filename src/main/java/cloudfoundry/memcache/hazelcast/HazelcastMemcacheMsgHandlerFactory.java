@@ -22,7 +22,17 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.getSerializationConfig().addSerializerConfig(serializerConfig);
 		config.addReplicatedMapConfig(new ReplicatedMapConfig()
 				.setName(Stat.STAT_MAP));
-		instance = Hazelcast.newHazelcastInstance(config);
+/*		MapConfig defaultMapConfig = new MapConfig();
+		defaultMapConfig.setAsyncBackupCount(0);
+		defaultMapConfig.setBackupCount(0);
+		defaultMapConfig.setEvictionPolicy(EvictionPolicy.RANDOM);
+		defaultMapConfig.setOptimizeQueries(false);
+		defaultMapConfig.setMergePolicy("com.hazelcast.map.merge.LatestUpdateMapMergePolicy");
+		defaultMapConfig.setReadBackupData(false);
+		defaultMapConfig.setStatisticsEnabled(false);
+		defaultMapConfig.setMaxSizeConfig(new MaxSizeConfig(1, MaxSizePolicy.USED_HEAP_SIZE));
+		config.addMapConfig(defaultMapConfig);
+*/		instance = Hazelcast.newHazelcastInstance(config);
 		instance.getReplicatedMap(Stat.STAT_MAP).put(Stat.UPTIME_KEY, System.currentTimeMillis());
 	}
 	

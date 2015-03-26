@@ -12,16 +12,21 @@ import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
 
-public class PlainAuthMsgHandler implements AuthMsgHandler {
+import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.codec.digest.DigestUtils;
+
+public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	public static final String SUPPORTED_SASL_MECHS = "PLAIN";
-	
-	private String mech;
-	private byte opcode;
+
 	private int opaque;
-	private int bodySize;
-	private boolean authenticated = false;
+	boolean authenticated = false;
 	private String username;
-	
+	private String key;
+
+	public SecretKeyAuthMsgHandler(String key) {
+		this.key = key;
+	}
+
 	@Override
 	public boolean listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
@@ -43,16 +48,9 @@ public class PlainAuthMsgHandler implements AuthMsgHandler {
 	@Override
 	public boolean startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		if(!SUPPORTED_SASL_MECHS.contains(request.key())) {
-			BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
-			response.setStatus(BinaryMemcacheResponseStatus.AUTH_ERROR);
-			response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
-			response.setOpcode(request.opcode());
-			response.setOpaque(request.opaque());
-			ctx.writeAndFlush(response);
-			return false;
+		if (!SUPPORTED_SASL_MECHS.contains(request.key())) {
+			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Authentication Mechanism: "+request.key()).send(ctx);
 		}
-		mech = request.key();
 		opaque = request.opaque();
 		return true;
 	}
@@ -63,25 +61,34 @@ public class PlainAuthMsgHandler implements AuthMsgHandler {
 		content.content().readBytes(arrayContent);
 		username = MemcacheUtils.extractSaslUsername(arrayContent);
 		String password = MemcacheUtils.extractSaslPassword(arrayContent);
-		authenticated = true;
-		BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
-		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-		response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
-		response.setOpaque(opaque);
-		ctx.writeAndFlush(response);
+		boolean validPassword = validatePassword(username, password);
+		if (validPassword) {
+			authenticated = true;
+			BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
+			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+			response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
+			response.setOpaque(opaque);
+			ctx.writeAndFlush(response);
+		} else {
+			authenticated = false;
+			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
+		}
 		return false;
 	}
-	
+
+	private boolean validatePassword(String username, String password) {
+		byte[] hash = DigestUtils.sha384((username + key).getBytes());
+		return Base64.encodeBase64String(hash).equals(password);
+	}
+
 	@Override
 	public boolean isAuthenticated() {
 		return authenticated;
 	}
-	
+
 	@Override
 	public String getUsername() {
 		return username;
 	}
-	
-	
 
 }

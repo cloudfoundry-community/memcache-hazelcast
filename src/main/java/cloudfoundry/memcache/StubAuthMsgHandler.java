@@ -30,10 +30,10 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 		response.setOpcode(request.opcode());
 		response.setOpaque(request.opaque());
-		response.setTotalBodyLength(PlainAuthMsgHandler.SUPPORTED_SASL_MECHS.length());
+		response.setTotalBodyLength(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.length());
 		ctx.write(response);
 		try {
-			MemcacheContent content = new DefaultLastMemcacheContent(Unpooled.wrappedBuffer(PlainAuthMsgHandler.SUPPORTED_SASL_MECHS.getBytes("US-ASCII")));
+			MemcacheContent content = new DefaultLastMemcacheContent(Unpooled.wrappedBuffer(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.getBytes("US-ASCII")));
 			ctx.writeAndFlush(content);
 		} catch (UnsupportedEncodingException e) {
 			throw new RuntimeException(e);
