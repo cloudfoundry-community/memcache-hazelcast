@@ -1,16 +1,35 @@
 package cloudfoundry.memcache.hazelcast;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import nats.client.Nats;
+import nats.client.spring.NatsBuilder;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.context.embedded.EmbeddedServletContainerFactory;
+import org.springframework.boot.context.embedded.tomcat.TomcatEmbeddedServletContainerFactory;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+import cf.nats.CfNats;
+import cf.nats.DefaultCfNats;
+import cf.nats.RouterRegisterHandler;
+import cf.spring.NettyEventLoopGroupFactoryBean;
+import cf.spring.PidFileFactory;
 import cf.spring.config.YamlPropertyContextInitializer;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
@@ -33,6 +52,8 @@ import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
 import com.hazelcast.config.TcpIpConfig;
 
 @Configuration
+@EnableAutoConfiguration
+@ComponentScan("cloudfoundry.memcache")
 public class Main {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
@@ -42,6 +63,62 @@ public class Main {
 	private static final String EVICTION_POLICY_KEY = "eviction_policy";
 	private static final String MAX_IDLE_SECONDS_KEY = "max_idle_seconds";
 	private static final String MAX_SIZE_USED_HEAP_KEY = "max_size_used_heap";
+
+	@Bean
+	TaskExecutor executor() {
+		ThreadPoolTaskExecutor taskExecutor = new ThreadPoolTaskExecutor();
+		taskExecutor.setCorePoolSize(10);
+		return taskExecutor;
+	}
+
+	@Bean
+	Nats nats(
+			ApplicationEventPublisher publisher,
+			@Value("#{config.nats.machines}") List<String> natsMachines) {
+		final NatsBuilder builder = new NatsBuilder(publisher);
+		builder.eventLoopGroup(workerGroup().getObject());
+		natsMachines.forEach(builder::addHost);
+		return builder.connect();
+	}
+
+	@Bean
+	CfNats cfNats(Nats nats) {
+		return new DefaultCfNats(nats);
+	}
+
+	@Bean
+	@Qualifier("worker")
+	NettyEventLoopGroupFactoryBean workerGroup() {
+		return new NettyEventLoopGroupFactoryBean();
+	}
+
+	@Bean
+	public EmbeddedServletContainerFactory servletContainer(
+			@Value("${host.port}") int port,
+			@Value("#{config['tomcat']?.base_directory}") String baseDirectory
+	) {
+		System.setProperty("java.security.egd", "file:/dev/./urandom");
+		final TomcatEmbeddedServletContainerFactory servletContainerFactory = new TomcatEmbeddedServletContainerFactory(port);
+		if (baseDirectory != null) {
+			servletContainerFactory.setBaseDirectory(new File(baseDirectory));
+		}
+		return servletContainerFactory;
+	}
+
+	@Bean
+	public PidFileFactory pidFile(Environment environment) throws IOException {
+		return new PidFileFactory(environment.getProperty("pidfile"));
+	}
+
+	@Bean
+	RouterRegisterHandler routerRegisterHandler(CfNats cfNats, Environment environment) {
+		return new RouterRegisterHandler(
+				cfNats,
+				environment.getProperty("host.local", "127.0.0.1"),
+				Integer.valueOf(environment.getProperty("host.port", "8080")),
+				environment.getProperty("host.public", "service-broker")
+		);
+	}
 
 	@Bean
 	HazelcastMemcacheMsgHandlerFactory hazelcastconfig(@Value("#{config['plans']}") Map<String, Map<String, Object>> plans, @Value("#{config['hazelcast']['machines']}") Map<String, List<String>> machines, @Value("#{config['hazelcast']['port']}") Integer port) {

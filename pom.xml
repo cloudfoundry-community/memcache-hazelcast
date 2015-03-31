@@ -37,27 +37,17 @@
 			<artifactId>spring-boot-starter</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>com.github.cloudfoundry-community</groupId>
 			<artifactId>cf-spring</artifactId>
 			<version>0.3-SNAPSHOT</version>
-			<exclusions>
-				<exclusion>
-					<artifactId>cf-nats</artifactId>
-					<groupId>com.github.cloudfoundry-community</groupId>
-				</exclusion>
-				<exclusion>
-					<artifactId>nats-client-spring</artifactId>
-					<groupId>com.github.cloudfoundry-community</groupId>
-				</exclusion>
-				<exclusion>
-					<artifactId>cf-component</artifactId>
-					<groupId>com.github.cloudfoundry-community</groupId>
-				</exclusion>
-				<exclusion>
-					<groupId>org.springframework.boot</groupId>
-					<artifactId>spring-boot-starter-web</artifactId>
-				</exclusion>
-			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>com.hazelcast</groupId>
@@ -103,11 +93,16 @@
 			<groupId>org.easymock</groupId>
 			<artifactId>easymock</artifactId>
 			<version>3.3.1</version>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.data</groupId>
-			<artifactId>spring-data-commons</artifactId>
-			<version>1.7.2.RELEASE</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>io.netty</groupId>
+				<artifactId>netty-all</artifactId>
+				<version>4.1.0.Beta4</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 </project>

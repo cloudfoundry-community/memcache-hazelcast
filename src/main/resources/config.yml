@@ -11,8 +11,23 @@ memcached:
 hazelcast:
   port: 5701
   machines:
-    pz1:
+    rz1:
     - 127.0.0.1
+
+host:
+  local: 10.255.196.119
+  public: memcache.cf1-dev.lds.org
+  port: 20080
+  username: basic
+  password: password
+
+loggregator_endpoint:
+  host: 1.2.3.4
+  shared_secret: loggregator_secret
+
+nats:
+  machines:
+  - nats://nats:password@10.118.216.238:4222
 
 plans:
   small:

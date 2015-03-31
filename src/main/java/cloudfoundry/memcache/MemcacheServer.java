@@ -1,7 +1,6 @@
 package cloudfoundry.memcache;
 
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
@@ -12,8 +11,12 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheServerCodec;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 
-public class MemcacheServer {
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+public class MemcacheServer {
+	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheServer.class);
+	
 	private final MemcacheMsgHandlerFactory msgHandlerFactory;
 	private EventLoopGroup bossGroup;
 	private EventLoopGroup workerGroup;
@@ -46,7 +49,7 @@ public class MemcacheServer {
 
 		try {
 			// Start the server.
-			ChannelFuture f = b.bind(port).sync();
+			b.bind(port).sync();
 		} catch (InterruptedException e) {
 			throw new IllegalStateException("Failed to start memcache server on port: "+port, e);
 		}
@@ -54,9 +57,12 @@ public class MemcacheServer {
 
 	@PreDestroy
 	public void shutdown() {
+		LOGGER.info("Shutting down memcache server.");
 		if (started) {
-			bossGroup.shutdownGracefully();
-			workerGroup.shutdownGracefully();
+			LOGGER.info("Shutting down boss thread group.");
+			bossGroup.shutdownGracefully().awaitUninterruptibly();
+			LOGGER.info("Shutting down worker thread group.");
+			workerGroup.shutdownGracefully().awaitUninterruptibly();
 		}
 	}
 }
