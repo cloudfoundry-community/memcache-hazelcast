@@ -8,7 +8,7 @@
 
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.github.cloudfoundry-community</groupId>
-	<artifactId>memcached-hazelcast-server</artifactId>
+	<artifactId>memcache-hazelcast</artifactId>
 	<version>1.0</version>
 	<build>
 		<finalName>${project.artifactId}</finalName>
