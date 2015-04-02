@@ -5,8 +5,9 @@ pidfile: /tmp/gateway.pid
 logging:
   level: INFO
 
-memcached:
+memcache:
   port: 54913
+  secret_key: some_secret_key
 
 hazelcast:
   port: 5701
@@ -54,6 +55,3 @@ plans:
     eviction_policy: LRU
     time_to_live: 86400
     max_size_used_heap: 1000
-
-auth:
-  secret_key: some_secret_key

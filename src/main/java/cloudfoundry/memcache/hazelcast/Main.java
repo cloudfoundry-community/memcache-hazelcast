@@ -166,12 +166,12 @@ public class Main {
 	}
 
 	@Bean
-	AuthMsgHandlerFactory authHandlerFactory(@Value("#{config['auth']['secret_key']}") String key) {
+	AuthMsgHandlerFactory authHandlerFactory(@Value("#{config['memcache']['secret_key']}") String key) {
 		return new SecretKeyAuthMsgHandlerFactory(key);
 	}
 
 	@Bean
-	MemcacheServer memcacheServer(MemcacheMsgHandlerFactory handlerFactory, AuthMsgHandlerFactory authFactory, @Value("#{config['memcached']['port']}") Integer port) {
+	MemcacheServer memcacheServer(MemcacheMsgHandlerFactory handlerFactory, AuthMsgHandlerFactory authFactory, @Value("#{config['memcache']['port']}") Integer port) {
 		LOGGER.info("Memcached server starting on port: "+port);
 		MemcacheServer server = new MemcacheServer(handlerFactory, port, authFactory);
 		return server;
