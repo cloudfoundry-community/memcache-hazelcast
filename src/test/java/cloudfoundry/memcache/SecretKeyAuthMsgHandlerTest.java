@@ -27,15 +27,21 @@ public class SecretKeyAuthMsgHandlerTest {
 		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest("PLAIN");
 		request.setOpaque(1234);
 		request.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
-		String username = UUID.randomUUID().toString();
-		String password = Base64.encodeBase64String(DigestUtils.sha384((username+SECRET_KEY).getBytes()));
-		byte[] encodedAuth = createdEncodedAuth(username, password);
+		String username = "plan"+UUID.randomUUID().toString();
+		UUID appGuid = UUID.randomUUID();
+		String password = Base64.encodeBase64String(DigestUtils.sha384((username+'|'+appGuid.toString()+SECRET_KEY).getBytes()));
+		byte[] encodedAuth = createdEncodedAuth(username, appGuid, password);
 		request.setTotalBodyLength(encodedAuth.length);
-		authHandler.startAuth(EasyMock.createNiceMock(ChannelHandlerContext.class) , request);
+		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
+		EasyMock.replay(ctxMock);
+		authHandler.startAuth(ctxMock , request);
 		
 		MemcacheContent content = new DefaultMemcacheContent(Unpooled.wrappedBuffer(encodedAuth));
-		authHandler.startAuth(EasyMock.createNiceMock(ChannelHandlerContext.class), content);
+		authHandler.startAuth(ctxMock, content);
 		assertTrue(authHandler.isAuthenticated());
+		assertEquals(authHandler.getAppGuid(), appGuid);
+		assertEquals(authHandler.getCacheName(), username);
+		assertEquals(authHandler.getUsername(), username+'|'+appGuid.toString());
 	}
 
 	@Test
@@ -45,21 +51,26 @@ public class SecretKeyAuthMsgHandlerTest {
 		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest("PLAIN");
 		request.setOpaque(1234);
 		request.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
+		UUID appGuid = UUID.randomUUID();
 		String username = UUID.randomUUID().toString();
 		String password = Base64.encodeBase64String(DigestUtils.sha384((username+SECRET_KEY+"Fake").getBytes()));
-		byte[] encodedAuth = createdEncodedAuth(username, password);
+		byte[] encodedAuth = createdEncodedAuth(username, appGuid, password);
 		request.setTotalBodyLength(encodedAuth.length);
-		authHandler.startAuth(EasyMock.createNiceMock(ChannelHandlerContext.class) , request);
+		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
+		EasyMock.replay(ctxMock);
+		authHandler.startAuth(ctxMock , request);
 		
 		MemcacheContent content = new DefaultMemcacheContent(Unpooled.wrappedBuffer(encodedAuth));
-		authHandler.startAuth(EasyMock.createNiceMock(ChannelHandlerContext.class), content);
+		authHandler.startAuth(ctxMock, content);
 		assertFalse(authHandler.isAuthenticated());
 	}
 
-	private byte[] createdEncodedAuth(String username, String password) {
-		byte[] encodedAuth =  new byte[username.length()+password.length()+2];
-		System.arraycopy(username.getBytes(), 0, encodedAuth, 1, username.length());
-		System.arraycopy(password.getBytes(), 0, encodedAuth, username.length()+2, password.length());
+	private byte[] createdEncodedAuth(String username, UUID appGuid, String password) {
+		String appGuidString = appGuid.toString();
+		String fullUsername = username+'|'+appGuidString;
+		byte[] encodedAuth =  new byte[1+fullUsername.length()+1+password.length()];
+		System.arraycopy(fullUsername.getBytes(), 0, encodedAuth, 1, fullUsername.length());
+		System.arraycopy(password.getBytes(), 0, encodedAuth, fullUsername.length()+2, password.length());
 		return encodedAuth;
 	}
 }

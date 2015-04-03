@@ -11,6 +11,7 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
+import java.util.UUID;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -22,6 +23,8 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	boolean authenticated = false;
 	private String username;
 	private String key;
+	private UUID appGuid;
+	private String cacheName;
 
 	public SecretKeyAuthMsgHandler(String key) {
 		this.key = key;
@@ -64,6 +67,8 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 		boolean validPassword = validatePassword(username, password);
 		if (validPassword) {
 			authenticated = true;
+			cacheName = username.substring(0, username.lastIndexOf('|'));
+			appGuid = UUID.fromString(username.substring(username.lastIndexOf('|')+1, username.length()));
 			BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
 			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 			response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
@@ -77,7 +82,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	}
 
 	private boolean validatePassword(String username, String password) {
-		byte[] hash = DigestUtils.sha384((username + key).getBytes());
+		byte[] hash = DigestUtils.sha384((username + key));
 		return Base64.encodeBase64String(hash).equals(password);
 	}
 
@@ -90,5 +95,14 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	public String getUsername() {
 		return username;
 	}
+	
+	@Override
+	public String getCacheName() {
+		return cacheName;
+	}
 
+	@Override
+	public UUID getAppGuid() {
+		return appGuid;
+	}
 }

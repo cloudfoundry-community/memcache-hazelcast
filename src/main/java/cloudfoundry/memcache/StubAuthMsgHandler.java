@@ -11,16 +11,19 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
+import java.util.UUID;
 
 public class StubAuthMsgHandler implements AuthMsgHandler {
 	
 	String username;
+	UUID appGuid;
 	
 	int opaque;
 	byte opcode;
 	
 	public StubAuthMsgHandler(String username) {
 		this.username = username;
+		this.appGuid = UUID.randomUUID();
 	}
 
 	@Override
@@ -63,6 +66,16 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 	
 	public boolean isAuthenticated() {
 		return true;
+	}
+	
+	@Override
+	public UUID getAppGuid() {
+		return appGuid;
+	}
+	
+	@Override
+	public String getCacheName() {
+		return username;
 	}
 	
 	@Override

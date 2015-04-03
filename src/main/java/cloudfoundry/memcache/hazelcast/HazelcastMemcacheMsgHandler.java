@@ -46,7 +46,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	long cas;
 
 	public IMap<String, HazelcastMemcacheCacheValue> getCache() {
-		return instance.getMap(authMsgHandler.getUsername());
+		return instance.getMap(authMsgHandler.getCacheName());
 	}
 
 	public HazelcastMemcacheMsgHandler(AuthMsgHandler authMsgHandler, HazelcastInstance instance) {
