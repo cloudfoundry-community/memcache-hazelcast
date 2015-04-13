@@ -2,6 +2,7 @@ package cloudfoundry.memcache;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
@@ -45,7 +46,8 @@ public class MemcacheServer {
 						ch.pipeline().addFirst(new BinaryMemcacheServerCodec());
 						ch.pipeline().addLast(new MemcacheChannelInboundHandlerAdapter(msgHandlerFactory, authMsgHandlerFactory.createAuthMsgHandler()));
 					}
-				});
+				})
+				.childOption(ChannelOption.TCP_NODELAY, true);
 
 		try {
 			// Start the server.
