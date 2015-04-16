@@ -5,6 +5,8 @@ import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 
 public interface MemcacheMsgHandler {
+	public byte getOpcode();
+	public int getOpaque();
 	public boolean get(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
 	public boolean getK(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
 	public boolean set(ChannelHandlerContext ctx, BinaryMemcacheRequest request);

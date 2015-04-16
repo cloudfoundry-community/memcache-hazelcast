@@ -7,7 +7,7 @@ logging:
 
 memcache:
   port: 54913
-  secret_key: some_secret_key
+  secret_key: 
 
 hazelcast:
   port: 5701

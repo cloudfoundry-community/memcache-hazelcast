@@ -3,14 +3,13 @@ package cloudfoundry.memcache.hazelcast;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.memcache.DefaultLastMemcacheContent;
 import io.netty.handler.codec.memcache.LastMemcacheContent;
 import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheOpcodes;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
-import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
-import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
@@ -25,7 +24,9 @@ import cloudfoundry.memcache.AuthMsgHandler;
 import cloudfoundry.memcache.MemcacheMsgHandler;
 import cloudfoundry.memcache.MemcacheUtils;
 
+import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.IMap;
 
 public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
@@ -38,20 +39,34 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	private static final int MAX_EXPIRATION_SEC = 60 * 60 * 24 * 30;
 	private static final int MAX_VALUE_SIZE = 1048576;
 	private static final long MAX_EXPIRATION = 0xFFFFFFFF;
-	boolean quiet;
-	byte opcode;
-	int opaque;
-	String key;
+	final byte opcode;
+	final int opaque;
+	final String key;
+	final long cas;
 	long expirationInSeconds;
-	long cas;
+	
+
+	public HazelcastMemcacheMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler, HazelcastInstance instance) {
+		this.authMsgHandler = authMsgHandler;
+		this.instance = instance;
+		this.opcode = request.opcode();
+		this.opaque = request.opaque();
+		this.key = request.key();
+		this.cas = request.cas();
+	}
+
+	@Override
+	public byte getOpcode() {
+		return opcode;
+	}
+
+	@Override
+	public int getOpaque() {
+		return opaque;
+	}
 
 	public IMap<String, HazelcastMemcacheCacheValue> getCache() {
 		return instance.getMap(authMsgHandler.getCacheName());
-	}
-
-	public HazelcastMemcacheMsgHandler(AuthMsgHandler authMsgHandler, HazelcastInstance instance) {
-		this.authMsgHandler = authMsgHandler;
-		this.instance = instance;
 	}
 
 	public HazelcastInstance getInstance() {
@@ -66,36 +81,48 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	private boolean handleGetRequest(ChannelHandlerContext ctx, BinaryMemcacheRequest request, byte nonQuietOpcode, boolean includeKey) {
 		MemcacheUtils.logRequest(request);
 
-		opcode = request.opcode();
-		key = request.key();
+		IExecutorService executor = instance.getExecutorService("exec");
+		
+		executor.submitToKeyOwner(new HazelcastGetCallable(authMsgHandler.getCacheName(), key), key, new ExecutionCallback<HazelcastMemcacheCacheValue>() {
+			@Override
+			public void onResponse(HazelcastMemcacheCacheValue value) {
+				if(value == null) {
+					System.out.println("Heap Cost:"+getCache().getLocalMapStats().getHeapCost());
+					System.out.println("No value returned.");
+				}
+				if (value == null && opcode == nonQuietOpcode) {
+					MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
+					return;
+				} else if (value == null) {
+					MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
+					return;
+				}
 
-		IMap<String, HazelcastMemcacheCacheValue> cache = getCache();
-
-		HazelcastMemcacheCacheValue value = cache.get(key);
-
-		if (value == null && request.opcode() == nonQuietOpcode) {
-			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
-		} else if (value == null) {
-			return false;
-		}
-
-		BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
-		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-		response.setOpcode(opcode);
-		response.setCas(value.getCAS());
-		response.setExtrasLength(value.getFlagLength());
-		response.setExtras(value.getFlags());
-		response.setOpaque(request.opaque());
-		if (includeKey) {
-			response.setKey(key);
-			response.setKeyLength((short) key.length());
-			response.setTotalBodyLength(value.getTotalFlagsAndValueLength() + key.length());
-		} else {
-			response.setTotalBodyLength(value.getTotalFlagsAndValueLength());
-		}
-		ctx.write(response.retain());
-		LastMemcacheContent content = new DefaultLastMemcacheContent(value.getValue());
-		ctx.writeAndFlush(content);
+				FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(key, value.getFlags(), value.getValue());
+				response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+				response.setOpcode(opcode);
+				response.setCas(value.getCAS());
+				response.setExtrasLength(value.getFlagLength());
+				response.setOpaque(opaque);
+				if (includeKey) {
+					response.setKeyLength((short) key.length());
+					response.setTotalBodyLength(value.getTotalFlagsAndValueLength() + key.length());
+				} else {
+					response.setKey(null);
+					response.setTotalBodyLength(value.getTotalFlagsAndValueLength());
+				}
+				ctx.writeAndFlush(response.retain());
+				if(LOGGER.isDebugEnabled()) {
+					LOGGER.debug("Current Socket: "+ctx.channel().id()+" Flushed response for key: "+key);
+				}
+			}
+			
+			@Override
+			public void onFailure(Throwable t) {
+				LOGGER.error("Error invoking GET asyncronously", t);
+				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
+			}
+		});
 		return false;
 	}
 
@@ -111,10 +138,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	private boolean processSetAddReplaceRequest(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		opcode = request.opcode();
-		key = request.key();
-		opaque = request.opaque();
-		cas = request.cas();
 		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
 		if (valueSize > MAX_VALUE_SIZE) {
 			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE).send(ctx);
@@ -191,6 +214,8 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		if (success) {
 			if (opcode == nonQuietOpcode) {
 				MemcacheUtils.returnSuccess(opcode, opaque, cacheValue.getCAS(), null).send(ctx);
+			} else {
+				MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
 			}
 		} else {
 			if (nonQuietOpcode == BinaryMemcacheOpcodes.SET) {
@@ -233,7 +258,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		} else if (!removed) {
 			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Entry not found.").send(ctx);
 		}
-		return false;
+		return MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
 	}
 
 	@Override
@@ -243,9 +268,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	private boolean handleIncrementAndDecrement(ChannelHandlerContext ctx, BinaryMemcacheRequest request, boolean increment) {
 		MemcacheUtils.logRequest(request);
-		opcode = request.opcode();
-		key = request.key();
-		opaque = request.opaque();
 		ByteBuf extras = request.extras();
 		long delta = extras.getLong(0);
 		long expiration = extras.getUnsignedInt(16);
@@ -309,17 +331,15 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			cache.unlock(key);
 		}
 		if (opcode == BinaryMemcacheOpcodes.INCREMENT || opcode == BinaryMemcacheOpcodes.DECREMENT) {
-			BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
+			FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null, value.getValue());
 			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 			response.setOpcode(opcode);
 			response.setCas(value.getCAS());
 			response.setOpaque(request.opaque());
 			response.setTotalBodyLength(value.getTotalFlagsAndValueLength());
-			ctx.write(response.retain());
-			LastMemcacheContent content = new DefaultLastMemcacheContent(value.getValue());
-			ctx.writeAndFlush(content);
+			ctx.writeAndFlush(response.retain());
 		}
-		return false;
+		return MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
 	}
 
 	@Override
@@ -348,7 +368,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		if (request.opcode() == BinaryMemcacheOpcodes.FLUSH) {
 			return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
 		}
-		return false;
+		return MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
 	}
 
 	@Override
@@ -366,10 +386,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	@Override
 	public boolean append(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		opcode = request.opcode();
-		key = request.key();
-		opaque = request.opaque();
-		cas = request.cas();
 
 		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
 
@@ -411,6 +427,8 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 			if (opcode == BinaryMemcacheOpcodes.APPEND) {
 				MemcacheUtils.returnSuccess(opcode, opaque, cacheValue.getCAS(), null).send(ctx);
+			} else {
+				MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
 			}
 		}
 		return true;
@@ -419,10 +437,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	@Override
 	public boolean prepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		opcode = request.opcode();
-		key = request.key();
-		opaque = request.opaque();
-		cas = request.cas();
 
 		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
 
@@ -464,6 +478,8 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 			if (opcode == BinaryMemcacheOpcodes.PREPEND) {
 				MemcacheUtils.returnSuccess(opcode, opaque, cacheValue.getCAS(), null).send(ctx);
+			} else {
+				MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
 			}
 		}
 		return true;
@@ -494,9 +510,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	@Override
 	public boolean stat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		opcode = request.opcode();
-		key = request.key();
-		opaque = request.opaque();
 		if (key != null && !key.isEmpty()) {
 			sendStat(ctx, opaque, key, STATS.get(key).getStat(this));
 		} else {
@@ -508,24 +521,17 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 
 	private void sendStat(ChannelHandlerContext ctx, int opaque, String key, String value) {
-		BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
+		FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer(value.getBytes()));
 		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 		response.setOpcode(opcode);
 		response.setOpaque(opaque);
 		response.setTotalBodyLength(key.length() + value.length());
-		ctx.write(response.retain());
-		LastMemcacheContent content = new DefaultLastMemcacheContent(Unpooled.wrappedBuffer(value.getBytes()));
-		ctx.write(content);
+		ctx.writeAndFlush(response.retain());
 	}
 
 	@Override
 	public boolean touch(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-
-		opcode = request.opcode();
-		key = request.key();
-		opaque = request.opaque();
-
 
 		IMap<String, HazelcastMemcacheCacheValue> cache = getCache();
 
@@ -563,11 +569,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	public boolean gat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 
-		opcode = request.opcode();
-		key = request.key();
-		opaque = request.opaque();
-
-
 		IMap<String, HazelcastMemcacheCacheValue> cache = getCache();
 
 		long expiration = request.extras().readUnsignedInt();
@@ -582,12 +583,12 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				if(opcode == BinaryMemcacheOpcodes.GAT || opcode == BinaryMemcacheOpcodes.GATK) {
 					return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
 				} else {
-					return false;
+					return MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
 				}
 			} else {
 				return returnValue(ctx, value, opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ, key);
 			}
- 		}
+		}
 
 		HazelcastMemcacheCacheValue value;
 		try {
@@ -608,14 +609,14 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		}
 		return returnValue(ctx, value, opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ, key);
 	}
+
 	private boolean returnValue(ChannelHandlerContext ctx, HazelcastMemcacheCacheValue value, boolean includeKey, String key) {
-    	BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
-    	response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-    	response.setOpcode(opcode);
-    	response.setCas(value.getCAS());
-    	response.setExtrasLength(value.getFlagLength());
-    	response.setExtras(value.getFlags());
-    	response.setOpaque(opaque);
+		FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, value.getFlags(), value.getValue());
+		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+		response.setOpcode(opcode);
+		response.setCas(value.getCAS());
+		response.setExtrasLength(value.getFlagLength());
+		response.setOpaque(opaque);
 		if (includeKey) {
 			response.setKey(key);
 			response.setKeyLength((short) key.length());
@@ -623,9 +624,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		} else {
 			response.setTotalBodyLength(value.getTotalFlagsAndValueLength());
 		}
-    	ctx.write(response.retain());
-    	LastMemcacheContent content = new DefaultLastMemcacheContent(value.getValue());
-    	ctx.writeAndFlush(content);
-    	return false;
+		ctx.writeAndFlush(response.retain());
+		return false;
 	}
 }

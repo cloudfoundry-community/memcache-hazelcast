@@ -34,7 +34,7 @@ public class MemcacheServer {
 	@PostConstruct
 	public void start() {
 		bossGroup = new NioEventLoopGroup(1);
-		workerGroup = new NioEventLoopGroup(100);
+		workerGroup = new NioEventLoopGroup();
 
 		started = true;
 
@@ -43,8 +43,9 @@ public class MemcacheServer {
 				.childHandler(new ChannelInitializer<SocketChannel>() {
 					@Override
 					protected void initChannel(SocketChannel ch) throws Exception {
-						ch.pipeline().addFirst(new BinaryMemcacheServerCodec());
-						ch.pipeline().addLast(new MemcacheChannelInboundHandlerAdapter(msgHandlerFactory, authMsgHandlerFactory.createAuthMsgHandler()));
+						ch.pipeline().addFirst("memcache", new BinaryMemcacheServerCodec());
+						ch.pipeline().addLast("memcache-handler", new MemcacheInboundHandlerAdapter(msgHandlerFactory, authMsgHandlerFactory.createAuthMsgHandler()));
+						ch.pipeline().addBefore("memcache-handler", "memcache-order", new MemcacheOrderingDuplexHandler());
 					}
 				})
 				.childOption(ChannelOption.TCP_NODELAY, true);

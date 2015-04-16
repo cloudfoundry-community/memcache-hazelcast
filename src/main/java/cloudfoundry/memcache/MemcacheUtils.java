@@ -1,12 +1,10 @@
 package cloudfoundry.memcache;
 
 import io.netty.buffer.Unpooled;
-import io.netty.handler.codec.memcache.DefaultLastMemcacheContent;
-import io.netty.handler.codec.memcache.LastMemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
-import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
-import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
 
@@ -23,84 +21,84 @@ public class MemcacheUtils {
 	
 	public static ResponseSender returnFailure(byte opcode, int opaque, short errorCode, String message) {
 		return (ctx) -> {
-			BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
+			FullBinaryMemcacheResponse response;
+			try {
+				response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer(message.getBytes("US-ASCII")));
+			} catch (UnsupportedEncodingException e) {
+				throw new RuntimeException(e);
+			}
 			response.setStatus(errorCode);
 			response.setOpaque(opaque);
 			response.setOpcode(opcode);
 			response.setTotalBodyLength(message.length());
-			ctx.write(response);
-			LastMemcacheContent content;
-			try {
-				content = new DefaultLastMemcacheContent(Unpooled.wrappedBuffer(message.getBytes("US-ASCII")));
-				ctx.writeAndFlush(content);
-			} catch (UnsupportedEncodingException e) {
-				throw new RuntimeException(e);
-			}
+			ctx.writeAndFlush(response.retain());
 			return false;
 		};
 	}
 	
 	public static ResponseSender returnSuccess(byte opcode, int opaque, long cas, String message) {
 		return (ctx) -> {
-    		String realMessage = message == null ? "" : message;
-    		BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
-    		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-    		response.setOpcode(opcode);
-    		response.setOpaque(opaque);
-    		response.setTotalBodyLength(realMessage.length());
-    		response.setCas(cas);
-    		if(realMessage.length() == 0) {
-    			ctx.writeAndFlush(response);
-    		} else {
-        		ctx.write(response);
-        		LastMemcacheContent content;
-        		try {
-        			content = new DefaultLastMemcacheContent(Unpooled.wrappedBuffer(realMessage.getBytes("US-ASCII")));
-        			ctx.writeAndFlush(content);
-        		} catch (UnsupportedEncodingException e) {
-        			throw new RuntimeException(e);
-        		}
-    		}
-    		return false;
+			String realMessage = message == null ? "" : message;
+			FullBinaryMemcacheResponse response;
+			try {
+				response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer(realMessage.getBytes("US-ASCII")));
+			} catch (UnsupportedEncodingException e) {
+				throw new RuntimeException(e);
+			}
+			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+			response.setOpcode(opcode);
+			response.setOpaque(opaque);
+			response.setTotalBodyLength(realMessage.length());
+			response.setCas(cas);
+			ctx.writeAndFlush(response.retain());
+			return false;
 		};
 	}
 
+	public static ResponseSender returnQuiet(byte opcode, int opaque) {
+		return (ctx) -> {
+			ctx.writeAndFlush(new QuietResponse(opcode, opaque));
+			return false;
+		};
+	}
+
+
 	public static void logRequest(BinaryMemcacheRequest request) {
-		if(LOGGER.isDebugEnabled()) {
-    		LOGGER.debug("Opcode: "+request.opcode());
-    		LOGGER.debug("Key Length: "+request.keyLength());
-    		LOGGER.debug("Key: "+request.key());
-    		LOGGER.debug("CAS: "+request.cas());
-    		LOGGER.debug("Magic: "+request.magic());
-    		LOGGER.debug("Reserved: "+request.reserved());
-    		LOGGER.debug("Opaque: "+request.opaque());
-    		LOGGER.debug("Extras Length: "+request.extrasLength());
-    		LOGGER.debug("Body Length: "+request.totalBodyLength());
+		if (LOGGER.isDebugEnabled()) {
+			LOGGER.debug("Opcode: " + request.opcode());
+			LOGGER.debug("Key Length: " + request.keyLength());
+			LOGGER.debug("Key: " + request.key());
+			LOGGER.debug("CAS: " + request.cas());
+			LOGGER.debug("Magic: " + request.magic());
+			LOGGER.debug("Reserved: " + request.reserved());
+			LOGGER.debug("Opaque: " + request.opaque());
+			LOGGER.debug("Extras Length: " + request.extrasLength());
+			LOGGER.debug("Body Length: " + request.totalBodyLength());
 		}
 	}
-	
+
 	public static String extractSaslUsername(byte[] auth) {
 		StringBuilder builder = new StringBuilder();
-		for(int i = 1;auth[i] != 0;i++) {
-			builder.append((char)auth[i]);
+		for (int i = 1; auth[i] != 0; i++) {
+			builder.append((char) auth[i]);
 		}
 		return builder.toString();
 	}
-	
+
 	public static String extractSaslPassword(byte[] auth) {
 		StringBuilder builder = new StringBuilder();
 		int passwordIndex = 1;
-		while(auth[passwordIndex] != 0) {
+		while (auth[passwordIndex] != 0) {
 			passwordIndex++;
 		}
 		passwordIndex++;
-		for(int i = passwordIndex;i < auth.length;i++) {
-			builder.append((char)auth[i]);
+		for (int i = passwordIndex; i < auth.length; i++) {
+			builder.append((char) auth[i]);
 		}
 		return builder.toString();
 
 	}
-	
+
 	private static final long UINT_MASK = 0xFFFFFFFFl;
 	
 	public static long hash64(final byte[] data, int start, int length, long seed) {

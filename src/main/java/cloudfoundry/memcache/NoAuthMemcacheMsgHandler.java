@@ -7,6 +7,24 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 
 public class NoAuthMemcacheMsgHandler implements MemcacheMsgHandler {
 
+	private final byte opcode;
+	private final int opaque;
+
+	public NoAuthMemcacheMsgHandler(BinaryMemcacheRequest request) {
+		this.opcode = request.opcode();
+		this.opaque = request.opaque();
+	}
+
+	@Override
+	public int getOpaque() {
+		return opaque;
+	}
+	
+	@Override
+	public byte getOpcode() {
+		return opcode;
+	}
+	
 	@Override
 	public boolean get(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);

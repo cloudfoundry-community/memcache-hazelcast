@@ -2,13 +2,14 @@ package cloudfoundry.memcache;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.memcache.DefaultLastMemcacheContent;
 import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheOpcodes;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
@@ -33,18 +34,17 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	@Override
 	public boolean listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		DefaultBinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
-		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-		response.setOpcode(request.opcode());
-		response.setOpaque(request.opaque());
-		response.setTotalBodyLength(SUPPORTED_SASL_MECHS.length());
-		ctx.write(response);
+		FullBinaryMemcacheResponse response;
 		try {
-			MemcacheContent content = new DefaultLastMemcacheContent(Unpooled.wrappedBuffer(SUPPORTED_SASL_MECHS.getBytes("US-ASCII")));
-			ctx.writeAndFlush(content);
+			response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.getBytes("US-ASCII")));
 		} catch (UnsupportedEncodingException e) {
 			throw new RuntimeException(e);
 		}
+		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+		response.setOpcode(request.opcode());
+		response.setOpaque(request.opaque());
+		response.setTotalBodyLength(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.length());
+		ctx.writeAndFlush(response.retain());
 		return false;
 	}
 

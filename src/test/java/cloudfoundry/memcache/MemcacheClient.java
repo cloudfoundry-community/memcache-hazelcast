@@ -12,7 +12,7 @@ public class MemcacheClient {
 	public static void main(String[] args) throws Exception {
 		ConnectionFactoryBuilder binaryConnectionFactory = new ConnectionFactoryBuilder();
 		binaryConnectionFactory.setProtocol(Protocol.BINARY);
-		binaryConnectionFactory.setAuthDescriptor(new AuthDescriptor(null, new PlainCallbackHandler("small123", "5u3/Ov+W83dPbtqo9bFELkBtM0+57F6ibuNGp54m3bAXPlK7Pya0OYdC+DI5rtFL")));
+		binaryConnectionFactory.setAuthDescriptor(new AuthDescriptor(null, new PlainCallbackHandler("small|123", "5u3/Ov+W83dPbtqo9bFELkBtM0+57F6ibuNGp54m3bAXPlK7Pya0OYdC+DI5rtFL")));
 		binaryConnectionFactory.setShouldOptimize(false);
 		binaryConnectionFactory.setAuthWaitTime(10000000);
 		binaryConnectionFactory.setOpTimeout(10000000);

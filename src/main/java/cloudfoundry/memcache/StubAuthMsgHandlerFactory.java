@@ -4,6 +4,6 @@ public class StubAuthMsgHandlerFactory implements AuthMsgHandlerFactory {
 
 	@Override
 	public AuthMsgHandler createAuthMsgHandler() {
-		return new StubAuthMsgHandler("StubUser");
+		return new StubAuthMsgHandler();
 	}
 }

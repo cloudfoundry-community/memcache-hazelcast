@@ -2,45 +2,44 @@ package cloudfoundry.memcache;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.memcache.DefaultLastMemcacheContent;
 import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheOpcodes;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
 
 public class StubAuthMsgHandler implements AuthMsgHandler {
 	
-	String username;
+	String username = "small|123";
 	UUID appGuid;
 	
 	int opaque;
 	byte opcode;
 	
-	public StubAuthMsgHandler(String username) {
-		this.username = username;
+	public StubAuthMsgHandler() {
 		this.appGuid = UUID.randomUUID();
 	}
 
 	@Override
 	public boolean listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		DefaultBinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
+		FullBinaryMemcacheResponse response;
+		try {
+			response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.getBytes("US-ASCII")));
+		} catch (UnsupportedEncodingException e) {
+			throw new RuntimeException(e);
+		}
 		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 		response.setOpcode(request.opcode());
 		response.setOpaque(request.opaque());
 		response.setTotalBodyLength(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.length());
-		ctx.write(response);
-		try {
-			MemcacheContent content = new DefaultLastMemcacheContent(Unpooled.wrappedBuffer(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.getBytes("US-ASCII")));
-			ctx.writeAndFlush(content);
-		} catch (UnsupportedEncodingException e) {
-			throw new RuntimeException(e);
-		}
+		ctx.writeAndFlush(response.retain());
 		return false;
 	}
 
@@ -65,7 +64,7 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 	}
 	
 	public boolean isAuthenticated() {
-		return true;
+		return username != null;
 	}
 	
 	@Override

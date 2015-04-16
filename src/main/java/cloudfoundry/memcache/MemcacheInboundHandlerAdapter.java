@@ -12,27 +12,22 @@ import io.netty.util.ReferenceCountUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerAdapter {
+public class MemcacheInboundHandlerAdapter extends ChannelInboundHandlerAdapter {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheChannelInboundHandlerAdapter.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheInboundHandlerAdapter.class);
 
 	private final MemcacheMsgHandlerFactory msgHandlerFactory;
 
 	private byte optcode = -1;
 	private MemcacheMsgHandler currentMsgHandler;
 	private final AuthMsgHandler authMsgHandler;
-
-	public MemcacheChannelInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler) {
+	
+	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler) {
 		super();
 		this.msgHandlerFactory = msgHandlerFactory;
 		this.authMsgHandler = authMsgHandler;
 	}
-	
-	@Override
-	public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-		super.channelInactive(ctx);
-	}
-	
+
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 		try {
@@ -44,9 +39,9 @@ public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerA
 				optcode = request.opcode();
 				if(currentMsgHandler == null) {
 					if(getAuthMsgHandler().isAuthenticated()) {
-						currentMsgHandler = msgHandlerFactory.createMsgHandler(getAuthMsgHandler());
+						currentMsgHandler = msgHandlerFactory.createMsgHandler(request, getAuthMsgHandler());
 					} else {
-						currentMsgHandler = new NoAuthMemcacheMsgHandler();
+						currentMsgHandler = new NoAuthMemcacheMsgHandler(request);
 					}
 				}
 			} else if(currentMsgHandler == null) {
@@ -183,19 +178,15 @@ public class MemcacheChannelInboundHandlerAdapter extends ChannelInboundHandlerA
 				LOGGER.info("Failed to handle request with optcode: "+optcode);
 				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(optcode)).send(ctx);
 			}
+		} catch(Exception e) {
+			LOGGER.error("Error while invoking MemcacheMsgHandler", e);
+			MemcacheUtils.returnFailure(currentMsgHandler.getOpcode(), currentMsgHandler.getOpaque(), (short)0x0084, e.getMessage()).send(ctx);
 		} finally {
 			ReferenceCountUtil.release(msg);
 		}
 	}
-	
+
 	private AuthMsgHandler getAuthMsgHandler() {
-//		if(authMsgHandler == null) {
-//			if(authRequired) {
-//				authMsgHandler = new PlainAuthMsgHandler();
-//			} else {
-//				authMsgHandler = new StubAuthMsgHandler("StubUser");
-//			}
-//		}
 		return authMsgHandler;
 	}
 	

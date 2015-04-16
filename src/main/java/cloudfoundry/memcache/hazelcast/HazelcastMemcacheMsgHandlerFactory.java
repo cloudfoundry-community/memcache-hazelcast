@@ -1,6 +1,9 @@
 package cloudfoundry.memcache.hazelcast;
 
+import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
+
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -14,6 +17,7 @@ import cloudfoundry.memcache.MemcacheMsgHandler;
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 
 import com.hazelcast.config.Config;
+import com.hazelcast.config.ExecutorConfig;
 import com.hazelcast.config.ReplicatedMapConfig;
 import com.hazelcast.config.SerializerConfig;
 import com.hazelcast.core.DistributedObject;
@@ -39,12 +43,17 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.logging.type", "slf4j");
 		config.setProperty("hazelcast.version.check.enabled", "false");
 
+		ExecutorConfig executorConfig = new ExecutorConfig();
+		executorConfig.setPoolSize(100).setQueueCapacity(1000).setStatisticsEnabled( false );
+		
+		config.setExecutorConfigs(Collections.singletonMap("exec", executorConfig));
+
 		instance = Hazelcast.newHazelcastInstance(config);
 		instance.getReplicatedMap(Stat.STAT_MAP).putIfAbsent(Stat.UPTIME_KEY, System.currentTimeMillis());
 	}
 
-	public MemcacheMsgHandler createMsgHandler(AuthMsgHandler authMsgHandler) {
-		return new HazelcastMemcacheMsgHandler(authMsgHandler, instance);
+	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler) {
+		return new HazelcastMemcacheMsgHandler(request, authMsgHandler, instance);
 	}
 
 	@Override

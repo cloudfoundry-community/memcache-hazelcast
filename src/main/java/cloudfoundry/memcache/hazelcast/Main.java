@@ -37,8 +37,10 @@ import cloudfoundry.memcache.AuthMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
+import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
 import com.hazelcast.config.Config;
+import com.hazelcast.config.EntryListenerConfig;
 import com.hazelcast.config.EvictionPolicy;
 import com.hazelcast.config.JoinConfig;
 import com.hazelcast.config.MapConfig;
@@ -50,6 +52,9 @@ import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.config.PartitionGroupConfig;
 import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
 import com.hazelcast.config.TcpIpConfig;
+import com.hazelcast.core.EntryEvent;
+import com.hazelcast.core.EntryListener;
+import com.hazelcast.core.MapEvent;
 
 @Configuration
 @EnableAutoConfiguration
@@ -139,6 +144,39 @@ public class Main {
 					mapConfig.setMaxSizeConfig(new MaxSizeConfig((Integer)planConfig.getValue(), MaxSizePolicy.USED_HEAP_SIZE));
 				}
 			}
+			EntryListenerConfig entryListenerConfig = new EntryListenerConfig();
+			entryListenerConfig.setImplementation(new EntryListener<String, HazelcastMemcacheCacheValue>() {
+				@Override
+				public void entryAdded(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
+					//System.out.println("Added entry with key: "+event.getKey());
+					
+				}
+				@Override
+				public void entryEvicted(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
+					//System.out.println("Evicted entry with key: "+event.getKey());
+				}
+				@Override
+				public void entryRemoved(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
+					// TODO Auto-generated method stub
+					
+				}
+				@Override
+				public void entryUpdated(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
+					// TODO Auto-generated method stub
+					
+				}
+				@Override
+				public void mapCleared(MapEvent event) {
+					// TODO Auto-generated method stub
+					
+				}
+				@Override
+				public void mapEvicted(MapEvent event) {
+					// TODO Auto-generated method stub
+					
+				}
+			});
+			mapConfig.addEntryListenerConfig(entryListenerConfig);
 			config.addMapConfig(mapConfig);
 		}
 		NetworkConfig networkConfig = new NetworkConfig().setReuseAddress(true);
@@ -167,6 +205,9 @@ public class Main {
 
 	@Bean
 	AuthMsgHandlerFactory authHandlerFactory(@Value("#{config['memcache']['secret_key']}") String key) {
+		if(key == null || key.isEmpty()) {
+			return new StubAuthMsgHandlerFactory();
+		}
 		return new SecretKeyAuthMsgHandlerFactory(key);
 	}
 
