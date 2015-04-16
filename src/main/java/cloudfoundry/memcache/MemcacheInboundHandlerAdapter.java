@@ -180,7 +180,9 @@ public class MemcacheInboundHandlerAdapter extends ChannelInboundHandlerAdapter 
 			}
 		} catch(Exception e) {
 			LOGGER.error("Error while invoking MemcacheMsgHandler", e);
-			MemcacheUtils.returnFailure(currentMsgHandler.getOpcode(), currentMsgHandler.getOpaque(), (short)0x0084, e.getMessage()).send(ctx);
+			if(currentMsgHandler != null) {
+				MemcacheUtils.returnFailure(currentMsgHandler.getOpcode(), currentMsgHandler.getOpaque(), (short)0x0084, e.getMessage()).send(ctx);
+			}
 		} finally {
 			ReferenceCountUtil.release(msg);
 		}

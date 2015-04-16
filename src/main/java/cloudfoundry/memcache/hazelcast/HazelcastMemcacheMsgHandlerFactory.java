@@ -36,6 +36,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		SerializerConfig serializerConfig = new SerializerConfig().setImplementation(new HazelcastMemcacheCacheValueSerializer()).setTypeClass(
 				HazelcastMemcacheCacheValue.class);
 		config.getSerializationConfig().addSerializerConfig(serializerConfig);
+		config.getSerializationConfig().addDataSerializableFactory(1, (int id) -> (id == 1) ? new HazelcastGetCallable() : null);
 		config.addReplicatedMapConfig(new ReplicatedMapConfig().setName(Stat.STAT_MAP));
 		config.setProperty("hazelcast.memcache.enabled", "false");
 		config.setProperty("hazelcast.rest.enabled", "false");
@@ -44,7 +45,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.version.check.enabled", "false");
 
 		ExecutorConfig executorConfig = new ExecutorConfig();
-		executorConfig.setPoolSize(100).setQueueCapacity(1000).setStatisticsEnabled( false );
+		executorConfig.setPoolSize(16).setStatisticsEnabled( false );
 		
 		config.setExecutorConfigs(Collections.singletonMap("exec", executorConfig));
 
