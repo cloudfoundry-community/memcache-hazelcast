@@ -10,26 +10,26 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 
-public class HazelcastGetCallable implements HazelcastInstanceAware, Callable<HazelcastMemcacheCacheValue>, IdentifiedDataSerializable {
+public class HazelcastDeleteCallable implements HazelcastInstanceAware, Callable<Boolean>, IdentifiedDataSerializable {
 	private transient HazelcastInstance instance;
 	private String cacheName;
 	private byte[] key;
 
-	public HazelcastGetCallable() {
+	public HazelcastDeleteCallable() {
 	}
 
-	public HazelcastGetCallable(String cacheName, byte[] key) {
+	public HazelcastDeleteCallable(String cacheName, byte[] key) {
 		super();
 		this.cacheName = cacheName;
 		this.key = key;
 	}
 
 	@Override
-	public HazelcastMemcacheCacheValue call() {
+	public Boolean call() {
 
 		IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
 
-		return cache.get(key);
+		return cache.remove(key) == null ? false : true;
 	}
 	
 	public IMap<byte[], HazelcastMemcacheCacheValue> getCache() {
@@ -43,12 +43,12 @@ public class HazelcastGetCallable implements HazelcastInstanceAware, Callable<Ha
 
 	@Override
 	public int getFactoryId() {
-		return 1;
+		return 4;
 	}
 	
 	@Override
 	public int getId() {
-		return 1;
+		return 4;
 	}
 	
 	@Override

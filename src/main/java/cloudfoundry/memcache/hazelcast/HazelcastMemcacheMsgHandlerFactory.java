@@ -32,11 +32,10 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	private final HazelcastInstance instance;
 
 	public HazelcastMemcacheMsgHandlerFactory(Config config) {
-		// Hazelcast.setOutOfMemoryHandler(outOfMemoryHandler);
 		SerializerConfig serializerConfig = new SerializerConfig().setImplementation(new HazelcastMemcacheCacheValueSerializer()).setTypeClass(
 				HazelcastMemcacheCacheValue.class);
 		config.getSerializationConfig().addSerializerConfig(serializerConfig);
-		config.getSerializationConfig().addDataSerializableFactory(1, (int id) -> (id == 1) ? new HazelcastGetCallable() : null);
+		setupSerializables(config);
 		config.addReplicatedMapConfig(new ReplicatedMapConfig().setName(Stat.STAT_MAP));
 		config.setProperty("hazelcast.memcache.enabled", "false");
 		config.setProperty("hazelcast.rest.enabled", "false");
@@ -51,6 +50,17 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 
 		instance = Hazelcast.newHazelcastInstance(config);
 		instance.getReplicatedMap(Stat.STAT_MAP).putIfAbsent(Stat.UPTIME_KEY, System.currentTimeMillis());
+	}
+
+	private void setupSerializables(Config config) {
+		config.getSerializationConfig().addDataSerializableFactory(1, (int id) -> (id == 1) ? new HazelcastGetCallable() : null);
+		config.getSerializationConfig().addDataSerializableFactory(2, (int id) -> (id == 2) ? new HazelcastSetCallable() : null);
+		config.getSerializationConfig().addDataSerializableFactory(3, (int id) -> (id == 3) ? new HazelcastMemcacheMessage() : null);
+		config.getSerializationConfig().addDataSerializableFactory(4, (int id) -> (id == 4) ? new HazelcastDeleteCallable() : null);
+		config.getSerializationConfig().addDataSerializableFactory(5, (int id) -> (id == 5) ? new HazelcastIncDecCallable() : null);
+		config.getSerializationConfig().addDataSerializableFactory(6, (int id) -> (id == 6) ? new HazelcastAppendPrependCallable() : null);
+		config.getSerializationConfig().addDataSerializableFactory(7, (int id) -> (id == 7) ? new HazelcastTouchCallable() : null);
+		config.getSerializationConfig().addDataSerializableFactory(8, (int id) -> (id == 8) ? new HazelcastGATCallable() : null);
 	}
 
 	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler) {

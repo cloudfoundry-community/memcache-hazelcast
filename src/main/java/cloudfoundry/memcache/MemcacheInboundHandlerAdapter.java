@@ -178,10 +178,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelInboundHandlerAdapter 
 				LOGGER.info("Failed to handle request with optcode: "+optcode);
 				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(optcode)).send(ctx);
 			}
-		} catch(Exception e) {
+		} catch(Throwable e) {
 			LOGGER.error("Error while invoking MemcacheMsgHandler", e);
 			if(currentMsgHandler != null) {
 				MemcacheUtils.returnFailure(currentMsgHandler.getOpcode(), currentMsgHandler.getOpaque(), (short)0x0084, e.getMessage()).send(ctx);
+				clearRequest();
 			}
 		} finally {
 			ReferenceCountUtil.release(msg);

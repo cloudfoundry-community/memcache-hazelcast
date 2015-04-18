@@ -11,11 +11,9 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 
-import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,13 +30,12 @@ import com.hazelcast.core.IMap;
 public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastMemcacheMsgHandler.class);
-	
+	public static final int MAX_VALUE_SIZE = 1048576;
 	final HazelcastInstance instance;
 	HazelcastMemcacheCacheValue cacheValue;
 	final AuthMsgHandler authMsgHandler;
-	private static final int MAX_EXPIRATION_SEC = 60 * 60 * 24 * 30;
-	private static final int MAX_VALUE_SIZE = 1048576;
-	private static final long MAX_EXPIRATION = 0xFFFFFFFF;
+	public static final int MAX_EXPIRATION_SEC = 60 * 60 * 24 * 30;
+	public static final long MAX_EXPIRATION = 0xFFFFFFFF;
 	final byte opcode;
 	final int opaque;
 	final byte[] key;
@@ -69,6 +66,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		return instance.getMap(authMsgHandler.getCacheName());
 	}
 
+	public IExecutorService getExecutor() {
+		return instance.getExecutorService("exec");
+	}
+
 	public HazelcastInstance getInstance() {
 		return instance;
 	}
@@ -81,15 +82,12 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	private boolean handleGetRequest(ChannelHandlerContext ctx, BinaryMemcacheRequest request, byte nonQuietOpcode, boolean includeKey) {
 		MemcacheUtils.logRequest(request);
 
-		IExecutorService executor = instance.getExecutorService("exec");
-		
+		IExecutorService executor = getExecutor();
+
 		executor.submitToKeyOwner(new HazelcastGetCallable(authMsgHandler.getCacheName(), key), key, new ExecutionCallback<HazelcastMemcacheCacheValue>() {
 			@Override
 			public void onResponse(HazelcastMemcacheCacheValue value) {
-				if(value == null) {
-					System.out.println("Heap Cost:"+getCache().getLocalMapStats().getHeapCost());
-					System.out.println("No value returned.");
-				}
+			
 				if (value == null && opcode == nonQuietOpcode) {
 					MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
 					return;
@@ -123,6 +121,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
 			}
 		});
+
 		return false;
 	}
 
@@ -138,6 +137,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	private boolean processSetAddReplaceRequest(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
+
 		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
 		if (valueSize > MAX_VALUE_SIZE) {
 			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE).send(ctx);
@@ -165,68 +165,33 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	private boolean processSetAddReplaceContent(ChannelHandlerContext ctx, MemcacheContent content, byte nonQuietOpcode) {
 		cacheValue.writeValue(content.content());
 		if (content instanceof LastMemcacheContent) {
-			IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
-			if (cas == 0) {
-				setValue(ctx, cache, nonQuietOpcode);
-				return false;
-			} else {
-				try {
-					cache.lock(key);
-					HazelcastMemcacheCacheValue value = cache.get(key);
-					if (value == null) {
-						return MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT, "No entry exists to check CAS against.")
-								.send(ctx);
-					}
-					long valueCAS = value.getCAS();
-					if (cas != valueCAS) {
-						return MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_EEXISTS, "CAS values don't match.").send(ctx);
-					}
-					setValue(ctx, cache, nonQuietOpcode);
-					return false;
-				} finally {
-					cache.unlock(key);
-				}
-			}
+			IExecutorService executor = getExecutor();
+
+			executor.submitToKeyOwner(new HazelcastSetCallable(authMsgHandler.getCacheName(), nonQuietOpcode, key, cas, cacheValue, expirationInSeconds), key,
+					new ExecutionCallback<HazelcastMemcacheMessage>() {
+						@Override
+						public void onResponse(HazelcastMemcacheMessage response) {
+							if (response.isSuccess()) {
+								if (opcode == nonQuietOpcode) {
+									MemcacheUtils.returnSuccess(opcode, opaque, response.getCas(), null).send(ctx);
+								} else {
+									MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+								}
+							} else {
+								MemcacheUtils.returnFailure(opcode, opaque, response.getCode(), response.getMsg()).send(ctx);
+							}
+						}
+
+						public void onFailure(Throwable t) {
+							LOGGER.error("Error invoking GET asyncronously", t);
+							MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
+						}
+					});
+			//Null out so it can get GCed No need to keep it now.
+			cacheValue = null;
+			return false;
 		}
 		return true;
-	}
-
-	private void setValue(ChannelHandlerContext ctx, IMap<byte[], HazelcastMemcacheCacheValue> cache, byte nonQuietOpcode) {
-		boolean success = false;
-		if (nonQuietOpcode == BinaryMemcacheOpcodes.SET) {
-			cache.set(key, cacheValue, expirationInSeconds, TimeUnit.SECONDS);
-			success = true;
-		} else if (nonQuietOpcode == BinaryMemcacheOpcodes.ADD) {
-			success = cache.putIfAbsent(key, cacheValue, expirationInSeconds, TimeUnit.SECONDS) == null ? true : false;
-		} else if (nonQuietOpcode == BinaryMemcacheOpcodes.REPLACE) {
-			try {
-				cache.lock(key);
-				if (cache.containsKey(key)) {
-					cache.set(key, cacheValue, expirationInSeconds, TimeUnit.SECONDS);
-					success = true;
-				} else {
-					success = false;
-				}
-			} finally {
-				cache.unlock(key);
-			}
-		}
-		if (success) {
-			if (opcode == nonQuietOpcode) {
-				MemcacheUtils.returnSuccess(opcode, opaque, cacheValue.getCAS(), null).send(ctx);
-			} else {
-				MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
-			}
-		} else {
-			if (nonQuietOpcode == BinaryMemcacheOpcodes.SET) {
-				MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.NOT_STORED, "Couldn't set the value for some reason.").send(ctx);
-			} else if (nonQuietOpcode == BinaryMemcacheOpcodes.ADD) {
-				MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_EEXISTS, "An value already exists with for the given key.").send(
-						ctx);
-			} else if (nonQuietOpcode == BinaryMemcacheOpcodes.REPLACE) {
-				MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT, "No value to replace for the given key.").send(ctx);
-			}
-		}
 	}
 
 	@Override
@@ -251,14 +216,27 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public boolean delete(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
-		boolean removed = cache.remove(request.key()) == null ? false : true;
-		if (removed && request.opcode() == BinaryMemcacheOpcodes.DELETE) {
-			return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
-		} else if (!removed) {
-			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Entry not found.").send(ctx);
-		}
-		return MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
+		MemcacheUtils.logRequest(request);
+		IExecutorService executor = getExecutor();
+
+		executor.submitToKeyOwner(new HazelcastDeleteCallable(authMsgHandler.getCacheName(), key), key, new ExecutionCallback<Boolean>() {
+			@Override
+			public void onResponse(Boolean response) {
+				if (response && opcode == BinaryMemcacheOpcodes.DELETE) {
+					MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+				} else if (!response) {
+					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Entry not found.").send(ctx);
+				} else {
+					MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
+				}
+			}
+
+			public void onFailure(Throwable t) {
+				LOGGER.error("Error invoking GET asyncronously", t);
+				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
+			}
+		});
+		return false;
 	}
 
 	@Override
@@ -272,6 +250,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		long delta = extras.getLong(0);
 		long expiration = extras.getUnsignedInt(16);
 		long currentTimeInSeconds = System.currentTimeMillis() / 1000;
+		long initialValue = extras.slice(8, 8).readLong();
 		if (expiration == MAX_EXPIRATION) {
 			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT,
 					"Expiration is MAX Value.  Not allowed according to spec for some reason.").send(ctx);
@@ -283,63 +262,33 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		} else {
 			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED, "Expiration is in the past.").send(ctx);
 		}
-		IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
-		HazelcastMemcacheCacheValue value;
+		IExecutorService executor = getExecutor();
 
-		try {
-			cache.lock(key);
-			value = cache.get(key);
-			if (value != null) {
-				long currentValue = 0;
-				if (value.getFlagLength() == 0) {
-					currentValue = value.getValue().getLong(0);
-				} else {
-					byte[] valueBytes = value.getCacheEntry();
-					if (valueBytes.length > 21) {
-						return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.DELTA_BADVAL,
-								"The ASCII value currently in key has too many digits.").send(ctx);
-					}
-					try {
-						currentValue = Long.parseUnsignedLong(new String(valueBytes, "ASCII"));
-					} catch (NumberFormatException e) {
-						if (valueBytes.length == 8) {
-							currentValue = value.getValue().getLong(0);
-						} else {
-							return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.DELTA_BADVAL, "Unable to parse existing value.").send(ctx);
-						}
-					} catch (UnsupportedEncodingException e) {
-						throw new RuntimeException(e);
-					}
+		executor.submitToKeyOwner(new HazelcastIncDecCallable(authMsgHandler.getCacheName(), key, expirationInSeconds, increment, delta, expiration, initialValue), key, new ExecutionCallback<HazelcastMemcacheMessage>() {
+			@Override
+			public void onResponse(HazelcastMemcacheMessage msg) {
+				if(!msg.isSuccess()) {
+					MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+					return;
 				}
-				if (increment) {
-					currentValue += delta;
-				} else {
-					if (Long.compareUnsigned(currentValue, delta) < -0) {
-						currentValue = 0;
-					} else {
-						currentValue -= delta;
-					}
+				if (opcode == BinaryMemcacheOpcodes.INCREMENT || opcode == BinaryMemcacheOpcodes.DECREMENT) {
+					FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null, msg.getValue().getValue());
+					response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+					response.setOpcode(opcode);
+					response.setCas(msg.getValue().getCAS());
+					response.setOpaque(opaque);
+					response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
+					ctx.writeAndFlush(response.retain());
 				}
-				value = new HazelcastMemcacheCacheValue(8, Unpooled.EMPTY_BUFFER, value.getExpiration());
-				value.writeValue(Unpooled.copyLong(currentValue));
-			} else {
-				value = new HazelcastMemcacheCacheValue(8, Unpooled.EMPTY_BUFFER, expiration);
-				value.writeValue(extras.slice(8, 8));
+				MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
 			}
-			cache.set(key, value, expirationInSeconds, TimeUnit.SECONDS);
-		} finally {
-			cache.unlock(key);
-		}
-		if (opcode == BinaryMemcacheOpcodes.INCREMENT || opcode == BinaryMemcacheOpcodes.DECREMENT) {
-			FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null, value.getValue());
-			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-			response.setOpcode(opcode);
-			response.setCas(value.getCAS());
-			response.setOpaque(request.opaque());
-			response.setTotalBodyLength(value.getTotalFlagsAndValueLength());
-			ctx.writeAndFlush(response.retain());
-		}
-		return MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
+
+			public void onFailure(Throwable t) {
+				LOGGER.error("Error invoking GET asyncronously", t);
+				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
+			}
+		});
+		return false;
 	}
 
 	@Override
@@ -383,8 +332,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, "CF Memcache 1.0").send(ctx);
 	}
 
-	@Override
-	public boolean append(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	private boolean appendPrepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 
 		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
@@ -394,95 +342,56 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		}
 		cacheValue = new HazelcastMemcacheCacheValue(valueSize, Unpooled.EMPTY_BUFFER, 0);
 		return true;
+	}
+
+	private boolean appendPrepend(ChannelHandlerContext ctx, MemcacheContent content, boolean append) {
+		cacheValue.writeValue(content.content());
+		if (content instanceof LastMemcacheContent) {
+			IExecutorService executor = getExecutor();
+
+			executor.submitToKeyOwner(new HazelcastAppendPrependCallable(authMsgHandler.getCacheName(), key, cacheValue, append), key, new ExecutionCallback<HazelcastMemcacheMessage>() {
+				@Override
+				public void onResponse(HazelcastMemcacheMessage msg) {
+					if(!msg.isSuccess()) {
+						MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+					}
+					if (opcode == BinaryMemcacheOpcodes.APPEND || opcode == BinaryMemcacheOpcodes.PREPEND) {
+						MemcacheUtils.returnSuccess(opcode, opaque, msg.getCas(), null).send(ctx);
+					} else {
+						MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
+					}
+				}
+
+				public void onFailure(Throwable t) {
+					LOGGER.error("Error invoking Opcode "+opcode+" asyncronously", t);
+					MemcacheUtils.returnFailure(opcode, opaque, (short) 0x0084, t.getMessage()).send(ctx);
+				}
+			});
+			//null out so it can get GCed while waiting for a response.
+			cacheValue = null;
+			return false;
+		}
+		return true;
+	}
+
+	@Override
+	public boolean append(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+		return appendPrepend(ctx, request);
 	}
 
 	@Override
 	public boolean append(ChannelHandlerContext ctx, MemcacheContent content) {
-		cacheValue.writeValue(content.content());
-		if (content instanceof LastMemcacheContent) {
-			IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
-			try {
-				cache.lock(key);
-				HazelcastMemcacheCacheValue value = cache.get(key);
-				if (value == null) {
-					return MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT,
-							"No value exists to append at the specified key.").send(ctx);
-				}
-				if (value.getFlagLength() == 0) {
-					return MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.DELTA_BADVAL,
-							"Value appears to be an inc/dec number.  Cannot append to this.").send(ctx);
-				}
-				int totalValueLength = value.getValueLength() + cacheValue.getValueLength();
-				if (totalValueLength > MAX_VALUE_SIZE) {
-					return MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE)
-							.send(ctx);
-				}
-				HazelcastMemcacheCacheValue appendedValue = new HazelcastMemcacheCacheValue(totalValueLength, value.getFlags(), value.getExpiration());
-				appendedValue.writeValue(value.getValue());
-				appendedValue.writeValue(cacheValue.getValue());
-
-				cache.set(key, appendedValue, appendedValue.getExpiration(), TimeUnit.SECONDS);
-			} finally {
-				cache.unlock(key);
-			}
-			if (opcode == BinaryMemcacheOpcodes.APPEND) {
-				MemcacheUtils.returnSuccess(opcode, opaque, cacheValue.getCAS(), null).send(ctx);
-			} else {
-				MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
-			}
-		}
-		return true;
+		return appendPrepend(ctx, content, true);
 	}
 
 	@Override
 	public boolean prepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-
-		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
-
-		if (valueSize > MAX_VALUE_SIZE) {
-			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE).send(ctx);
-		}
-		cacheValue = new HazelcastMemcacheCacheValue(valueSize, Unpooled.EMPTY_BUFFER, 0);
-		return true;
+		return appendPrepend(ctx, request);
 	}
 
 	@Override
 	public boolean prepend(ChannelHandlerContext ctx, MemcacheContent content) {
-		cacheValue.writeValue(content.content());
-		if (content instanceof LastMemcacheContent) {
-			IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
-			try {
-				cache.lock(key);
-				HazelcastMemcacheCacheValue value = cache.get(key);
-				if (value == null) {
-					return MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT,
-							"No value exists to append at the specified key.").send(ctx);
-				}
-				if (value.getFlagLength() == 0) {
-					return MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.DELTA_BADVAL,
-							"Value appears to be an inc/dec number.  Cannot append to this.").send(ctx);
-				}
-				int totalValueLength = value.getValueLength() + cacheValue.getValueLength();
-				if (totalValueLength > MAX_VALUE_SIZE) {
-					return MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE)
-							.send(ctx);
-				}
-				HazelcastMemcacheCacheValue appendedValue = new HazelcastMemcacheCacheValue(totalValueLength, value.getFlags(), value.getExpiration());
-				appendedValue.writeValue(cacheValue.getValue());
-				appendedValue.writeValue(value.getValue());
-
-				cache.set(key, appendedValue, appendedValue.getExpiration(), TimeUnit.SECONDS);
-			} finally {
-				cache.unlock(key);
-			}
-			if (opcode == BinaryMemcacheOpcodes.PREPEND) {
-				MemcacheUtils.returnSuccess(opcode, opaque, cacheValue.getCAS(), null).send(ctx);
-			} else {
-				MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
-			}
-		}
-		return true;
+		return appendPrepend(ctx, content, false);
 	}
 
 	private static final Map<byte[], Stat> STATS;
@@ -532,99 +441,70 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	@Override
 	public boolean touch(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-
-		IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
-
 		long expiration = request.extras().readUnsignedInt();
-		long currentTimeInSeconds = System.currentTimeMillis() / 1000;
-		if (expiration <= MAX_EXPIRATION_SEC) {
-			expirationInSeconds = expiration;
-		} else if (expiration > currentTimeInSeconds) {
-			expirationInSeconds = expiration - currentTimeInSeconds;
-		} else {
-			cache.remove(key);
-			return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
-		}
 
-		try {
-			cache.lock(key);
-			HazelcastMemcacheCacheValue value = cache.get(key);
+		IExecutorService executor = getExecutor();
 
-			if (value == null) {
-				return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
-			}
-			if (value.getExpiration() == expiration) {
-				cache.set(key, value, expiration, TimeUnit.SECONDS);
-			} else {
-				HazelcastMemcacheCacheValue newValue = new HazelcastMemcacheCacheValue(value.getValueLength(), value.getFlags(), expiration);
-				cache.set(key, newValue, expiration, TimeUnit.SECONDS);
-			}
-		} finally {
-			cache.unlock(key);
-		}
-		return MemcacheUtils.returnSuccess(opcode, opaque, 0, null).send(ctx);
+		executor.submitToKeyOwner(new HazelcastTouchCallable(authMsgHandler.getCacheName(), key, expiration), key,
+				new ExecutionCallback<HazelcastMemcacheMessage>() {
+					@Override
+					public void onResponse(HazelcastMemcacheMessage msg) {
+						if (!msg.isSuccess()) {
+							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+							return;
+						}
+						MemcacheUtils.returnSuccess(opcode, opaque, 0, null).send(ctx);
+					}
+
+					public void onFailure(Throwable t) {
+						LOGGER.error("Error invoking GET asyncronously", t);
+						MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
+					}
+				});
+		return false;
 	}
 
 	@Override
 	public boolean gat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 
-		IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
-
 		long expiration = request.extras().readUnsignedInt();
-		long currentTimeInSeconds = System.currentTimeMillis() / 1000;
-		if (expiration <= MAX_EXPIRATION_SEC) {
-			expirationInSeconds = expiration;
-		} else if (expiration > currentTimeInSeconds) {
-			expirationInSeconds = expiration - currentTimeInSeconds;
-		} else {
-			HazelcastMemcacheCacheValue value = cache.remove(key);
-			if(value == null) {
-				if(opcode == BinaryMemcacheOpcodes.GAT || opcode == BinaryMemcacheOpcodes.GATK) {
-					return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
-				} else {
-					return MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
-				}
-			} else {
-				return returnValue(ctx, value, opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ, key);
-			}
-		}
 
-		HazelcastMemcacheCacheValue value;
-		try {
-			cache.lock(key);
-			value = cache.get(key);
+		IExecutorService executor = getExecutor();
+		executor.submitToKeyOwner(new HazelcastGATCallable(authMsgHandler.getCacheName(), key, expiration), key,
+				new ExecutionCallback<HazelcastMemcacheMessage>() {
+					@Override
+					public void onResponse(HazelcastMemcacheMessage msg) {
+						if (!msg.isSuccess()) {
+							if (msg.getCode() == BinaryMemcacheResponseStatus.KEY_ENOENT && (opcode == BinaryMemcacheOpcodes.GATQ
+									|| opcode == BinaryMemcacheOpcodes.GATKQ)) {
+								MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+							} else {
+								MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+							}
+							return;
+						}
+						FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, msg.getValue().getFlags(), msg.getValue().getValue());
+						response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+						response.setOpcode(opcode);
+						response.setCas(msg.getValue().getCAS());
+						response.setExtrasLength(msg.getValue().getFlagLength());
+						response.setOpaque(opaque);
+						if (opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ) {
+							response.setKey(new String(key));
+							response.setKeyLength((short) key.length);
+							response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength() + key.length);
+						} else {
+							response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
+						}
+						ctx.writeAndFlush(response.retain());
+					}
 
-			if (value == null) {
-				return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
-			}
-			if (value.getExpiration() == expiration) {
-				cache.set(key, value, expiration, TimeUnit.SECONDS);
-			} else {
-				HazelcastMemcacheCacheValue newValue = new HazelcastMemcacheCacheValue(value.getValueLength(), value.getFlags(), expiration);
-				cache.set(key, newValue, expiration, TimeUnit.SECONDS);
-			}
-		} finally {
-			cache.unlock(key);
-		}
-		return returnValue(ctx, value, opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ, key);
-	}
-
-	private boolean returnValue(ChannelHandlerContext ctx, HazelcastMemcacheCacheValue value, boolean includeKey, byte[] key) {
-		FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, value.getFlags(), value.getValue());
-		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-		response.setOpcode(opcode);
-		response.setCas(value.getCAS());
-		response.setExtrasLength(value.getFlagLength());
-		response.setOpaque(opaque);
-		if (includeKey) {
-			response.setKey(new String(key));
-			response.setKeyLength((short) key.length);
-			response.setTotalBodyLength(value.getTotalFlagsAndValueLength() + key.length);
-		} else {
-			response.setTotalBodyLength(value.getTotalFlagsAndValueLength());
-		}
-		ctx.writeAndFlush(response.retain());
+					public void onFailure(Throwable t) {
+						LOGGER.error("Error invoking GET asyncronously", t);
+						MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
+					}
+				});
 		return false;
 	}
 }
