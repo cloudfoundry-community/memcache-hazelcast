@@ -40,7 +40,6 @@ import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
 import com.hazelcast.config.Config;
-import com.hazelcast.config.EntryListenerConfig;
 import com.hazelcast.config.EvictionPolicy;
 import com.hazelcast.config.JoinConfig;
 import com.hazelcast.config.MapConfig;
@@ -52,9 +51,6 @@ import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.config.PartitionGroupConfig;
 import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
 import com.hazelcast.config.TcpIpConfig;
-import com.hazelcast.core.EntryEvent;
-import com.hazelcast.core.EntryListener;
-import com.hazelcast.core.MapEvent;
 
 @Configuration
 @EnableAutoConfiguration
@@ -126,11 +122,19 @@ public class Main {
 	}
 
 	@Bean
-	HazelcastMemcacheMsgHandlerFactory hazelcastconfig(@Value("#{config['plans']}") Map<String, Map<String, Object>> plans, @Value("#{config['hazelcast']['machines']}") Map<String, List<String>> machines, @Value("#{config['hazelcast']['port']}") Integer port) {
-		
+	HazelcastMemcacheMsgHandlerFactory hazelcastconfig(@Value("#{config['plans']}") Map<String,Map<String, Object>> plans,
+			@Value("#{config['hazelcast']['machines']}") Map<String, List<String>> machines,
+			@Value("#{config['hazelcast']['port']}") Integer port,
+			@Value("#{config['hazelcast']['local_member_safe_timeout']}") Long localMemberSafeTimeout,
+			@Value("#{config['hazelcast']['minimum_cluster_members']}") Integer minimumClusterMembers,
+			@Value("#{config['hazelcast']['executor_pool_size']}") Integer executorPoolSize,
+			@Value("#{config['hazelcast']['max_size']}") Integer maxSize,
+			@Value("#{config['hazelcast']['percent_to_trim']}") Integer percentToTrim,
+			@Value("#{config['hazelcast']['trim_delay']}") Integer trimDelay) {
 		Config config = new Config();
 		for(Map.Entry<String, Map<String, Object>> plan : plans.entrySet()) {
 			MapConfig mapConfig = new MapConfig(plan.getKey()+"*");
+			mapConfig.setStatisticsEnabled(true);
 			for(Map.Entry<String, Object> planConfig : plan.getValue().entrySet()) {
 				if(BACKUP_KEY.equals(planConfig.getKey())) {
 					mapConfig.setBackupCount((Integer)planConfig.getValue());
@@ -144,7 +148,7 @@ public class Main {
 					mapConfig.setMaxSizeConfig(new MaxSizeConfig((Integer)planConfig.getValue(), MaxSizePolicy.USED_HEAP_SIZE));
 				}
 			}
-			EntryListenerConfig entryListenerConfig = new EntryListenerConfig();
+/*			EntryListenerConfig entryListenerConfig = new EntryListenerConfig();
 			entryListenerConfig.setImplementation(new EntryListener<String, HazelcastMemcacheCacheValue>() {
 				@Override
 				public void entryAdded(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
@@ -176,7 +180,7 @@ public class Main {
 					
 				}
 			});
-			mapConfig.addEntryListenerConfig(entryListenerConfig);
+			mapConfig.addEntryListenerConfig(entryListenerConfig);*/
 			config.addMapConfig(mapConfig);
 		}
 		NetworkConfig networkConfig = new NetworkConfig().setReuseAddress(true);
@@ -200,7 +204,7 @@ public class Main {
 			}
 			partitionGroupConfig.addMemberGroupConfig(memberGroupConfig);
 		}
-		return new HazelcastMemcacheMsgHandlerFactory(config);
+		return new HazelcastMemcacheMsgHandlerFactory(config, localMemberSafeTimeout, minimumClusterMembers, executorPoolSize, maxSize, percentToTrim, trimDelay);
 	}
 
 	@Bean

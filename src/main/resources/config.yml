@@ -11,6 +11,12 @@ memcache:
 
 hazelcast:
   port: 5701
+  local_member_safe_timeout: 120
+  minimum_cluster_members: 1
+  executor_pool_size: 16
+  max_size: 536870912
+  percent_to_trim: 20
+  trim_delay: 10
   machines:
     rz1:
     - 127.0.0.1

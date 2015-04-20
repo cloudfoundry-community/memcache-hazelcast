@@ -48,10 +48,14 @@ public class MemcacheServer {
 						ch.pipeline().addBefore("memcache-handler", "memcache-order", new MemcacheOrderingDuplexHandler());
 					}
 				})
-				.childOption(ChannelOption.TCP_NODELAY, true);
+				.childOption(ChannelOption.TCP_NODELAY, true)
+				.childOption(ChannelOption.SO_KEEPALIVE, true);
 
 		try {
-			// Start the server.
+			LOGGER.info("Waiting for the Hazelcast handler to be ready to accept connections.");
+			while(!msgHandlerFactory.isReady()) {
+				Thread.sleep(1000);
+			}
 			b.bind(port).sync();
 		} catch (InterruptedException e) {
 			throw new IllegalStateException("Failed to start memcache server on port: "+port, e);

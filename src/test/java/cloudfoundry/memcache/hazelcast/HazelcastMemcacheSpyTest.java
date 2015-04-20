@@ -30,7 +30,7 @@ public class HazelcastMemcacheSpyTest {
 	@BeforeClass
 	public void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
-		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config());
+		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config(), 1, 1, 16, 536870912, 20, 1);
 		
 		
 		int localPort = 54913;

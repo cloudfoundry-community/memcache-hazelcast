@@ -5,6 +5,8 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PreDestroy;
@@ -28,10 +30,17 @@ import com.hazelcast.core.PartitionService;
 
 public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFactory {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastMemcacheMsgHandlerFactory.class);
+	public static final String EXECUTOR_INSTANCE_NAME = "memcache";
 
 	private final HazelcastInstance instance;
+	private final long localMemberSafeTimeout;
+	private final int minimumClusterMembers;
+	private final ScheduledExecutorService executor;
 
-	public HazelcastMemcacheMsgHandlerFactory(Config config) {
+	public HazelcastMemcacheMsgHandlerFactory(Config config, long localMemberSafeTimeout, int minimumClusterMembers, int executorPoolSize, int totalHeap, int percentToTrim, int trimDelay) {
+		this.localMemberSafeTimeout = localMemberSafeTimeout;
+		this.minimumClusterMembers = minimumClusterMembers;
+
 		SerializerConfig serializerConfig = new SerializerConfig().setImplementation(new HazelcastMemcacheCacheValueSerializer()).setTypeClass(
 				HazelcastMemcacheCacheValue.class);
 		config.getSerializationConfig().addSerializerConfig(serializerConfig);
@@ -44,12 +53,14 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.version.check.enabled", "false");
 
 		ExecutorConfig executorConfig = new ExecutorConfig();
-		executorConfig.setPoolSize(16).setStatisticsEnabled( false );
+		executorConfig.setPoolSize(executorPoolSize).setStatisticsEnabled( false );
 		
-		config.setExecutorConfigs(Collections.singletonMap("exec", executorConfig));
+		config.setExecutorConfigs(Collections.singletonMap(EXECUTOR_INSTANCE_NAME, executorConfig));
 
 		instance = Hazelcast.newHazelcastInstance(config);
 		instance.getReplicatedMap(Stat.STAT_MAP).putIfAbsent(Stat.UPTIME_KEY, System.currentTimeMillis());
+		executor = new ScheduledThreadPoolExecutor(1);
+		executor.scheduleWithFixedDelay(new MaxHeapTrimmer(instance, totalHeap, percentToTrim), trimDelay, trimDelay, TimeUnit.SECONDS);
 	}
 
 	private void setupSerializables(Config config) {
@@ -85,15 +96,29 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	
 	public void deleteCache(String name) {
 		instance.getMap(name).destroy();
-	};
+	}
+
+	@Override
+	public boolean isReady() {
+		if(instance.getLifecycleService().isRunning() &&
+				instance.getCluster().getMembers().size() >= minimumClusterMembers) {
+			return true;
+		}
+		return false;
+	}
 	
 	@PreDestroy
 	public void shutdown() {
 		LOGGER.info("Shutting down Hazelcast.");
 		try {
+			executor.shutdown();
+		} catch(Throwable t) {
+			LOGGER.error("Unexpected error shutting down scheduled executor.", t);
+		}
+		try {
 			PartitionService partitionService = instance.getPartitionService();
 			if (!partitionService.isLocalMemberSafe()) {
-				partitionService.forceLocalMemberToBeSafe(30, TimeUnit.SECONDS);
+				partitionService.forceLocalMemberToBeSafe(localMemberSafeTimeout, TimeUnit.SECONDS);
 			}
 		} finally {
 			instance.shutdown();

@@ -67,7 +67,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 
 	public IExecutorService getExecutor() {
-		return instance.getExecutorService("exec");
+		return instance.getExecutorService(HazelcastMemcacheMsgHandlerFactory.EXECUTOR_INSTANCE_NAME);
 	}
 
 	public HazelcastInstance getInstance() {
@@ -313,7 +313,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	@Override
 	public boolean flush(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		getCache().clear();
+		getCache().evictAll();
 		if (request.opcode() == BinaryMemcacheOpcodes.FLUSH) {
 			return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
 		}

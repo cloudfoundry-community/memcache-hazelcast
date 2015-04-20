@@ -27,6 +27,14 @@ public class MemcacheInboundHandlerAdapter extends ChannelInboundHandlerAdapter 
 		this.msgHandlerFactory = msgHandlerFactory;
 		this.authMsgHandler = authMsgHandler;
 	}
+	
+	@Override
+	public void channelActive(ChannelHandlerContext ctx) throws Exception {
+		if(!msgHandlerFactory.isReady()) {
+			LOGGER.warn("Closing connection because hazelcast is not yet ready to recieve connections.");
+			ctx.close();
+		}
+	}
 
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {

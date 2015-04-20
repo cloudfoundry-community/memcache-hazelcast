@@ -25,7 +25,7 @@ public class HazelcastMemcapableTest {
 	@BeforeClass
 	public void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
-		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config());
+		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config(), 1, 1, 16, 536870912, 20, 1);
 
 		localPort = 54913;
 		try (ServerSocket s = new ServerSocket(0)) {

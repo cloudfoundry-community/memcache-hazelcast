@@ -9,4 +9,5 @@ public interface MemcacheMsgHandlerFactory {
 	public List<String> getCaches();
 	public void createCache(String name);
 	public void deleteCache(String name);
+	public boolean isReady();
 }
