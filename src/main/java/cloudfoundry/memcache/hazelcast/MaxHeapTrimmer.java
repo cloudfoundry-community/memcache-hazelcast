@@ -39,7 +39,11 @@ public class MaxHeapTrimmer implements Runnable {
 						if (heapCost == 0) {
 							// Cleanup maps that aren't storing anything.
 							if (map.size() == 0) {
-								map.destroy();
+								try {
+									map.destroy();
+								} catch(Throwable t) {
+									LOGGER.warn("Ignoring unexpected error attempting to destory: "+map.getName(), t);
+								}
 							}
 							continue;
 						}
