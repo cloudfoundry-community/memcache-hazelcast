@@ -30,7 +30,7 @@ public class HazelcastMemcacheSpyTest {
 	@BeforeClass
 	public void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
-		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config(), 1, 1, 16, 536870912, 20, 1);
+		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config(), 1, 1, 16, 536870912, 20, 10000);
 		
 		
 		int localPort = 54913;
@@ -103,7 +103,7 @@ public class HazelcastMemcacheSpyTest {
 			//success
 		}
 	}
-	
+
 	@Test
 	public void touchBasic() throws Exception {
 		Assert.assertNull(c.get("nothingHere"));

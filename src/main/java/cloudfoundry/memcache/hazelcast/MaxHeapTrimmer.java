@@ -31,16 +31,25 @@ public class MaxHeapTrimmer implements Runnable {
 			long totalUsed;
 			do {
 				totalUsed = 0;
-    			for (DistributedObject object : instance.getDistributedObjects()) {
-    				if (object instanceof IMap) {
-    					totalUsed += ((IMap<?, ?>) object).getLocalMapStats().getHeapCost();
-    				}
-    			}
-    			if (totalUsed > totalHeap) {
-    				LOGGER.error("Cache size '" + totalUsed + "' is greater than total allowed '" + totalHeap + "' trimming '" + percentToTrim
-    						+ "' percent from all caches.  We need to add more RAM to our cache servers.");
-    				trimCacheSize();
-    			}
+				for (DistributedObject object : instance.getDistributedObjects()) {
+					if (object instanceof IMap) {
+						IMap<?, ?> map = (IMap<?, ?>) object;
+						long heapCost = map.getLocalMapStats().getHeapCost();
+						totalUsed += heapCost;
+						if (heapCost == 0) {
+							// Cleanup maps that aren't storing anything.
+							if (map.size() == 0) {
+								map.destroy();
+							}
+							continue;
+						}
+					}
+				}
+				if (totalUsed > totalHeap) {
+					LOGGER.error("Cache size '" + totalUsed + "' is greater than total allowed '" + totalHeap + "' trimming '" + percentToTrim
+							+ "' percent from all caches.  We need to add more RAM to our cache servers.");
+					trimCacheSize();
+				}
 			} while(totalUsed > totalHeap);
 		} catch (Throwable t) {
 			LOGGER.error("Unexpected error running max heap trimmer.", t);
@@ -54,9 +63,6 @@ public class MaxHeapTrimmer implements Runnable {
 				IMap<Object, ?> map = (IMap<Object, ?>)object;
 				long ownedEntryCost = map.getLocalMapStats().getOwnedEntryMemoryCost();
 				if(ownedEntryCost <= 0) {
-					if(map.size() == 0) {
-						map.destroy();
-					}
  					continue;
 				}
 				long bytesToRemove = (ownedEntryCost/(100/percentToTrim));

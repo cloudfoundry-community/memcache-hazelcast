@@ -52,8 +52,12 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.logging.type", "slf4j");
 		config.setProperty("hazelcast.version.check.enabled", "false");
 
-		ExecutorConfig executorConfig = new ExecutorConfig();
-		executorConfig.setPoolSize(executorPoolSize).setStatisticsEnabled( false );
+		ExecutorConfig executorConfig = new ExecutorConfig().setStatisticsEnabled( false );
+		if(executorPoolSize == 0) {
+			executorConfig.setPoolSize(Runtime.getRuntime().availableProcessors()*2);
+		} else {
+			executorConfig.setPoolSize(executorPoolSize);
+		}
 		
 		config.setExecutorConfigs(Collections.singletonMap(EXECUTOR_INSTANCE_NAME, executorConfig));
 
