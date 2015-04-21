@@ -37,7 +37,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	private final int minimumClusterMembers;
 	private final ScheduledExecutorService executor;
 
-	public HazelcastMemcacheMsgHandlerFactory(Config config, long localMemberSafeTimeout, int minimumClusterMembers, int executorPoolSize, int totalHeap, int percentToTrim, int trimDelay) {
+	public HazelcastMemcacheMsgHandlerFactory(Config config, long localMemberSafeTimeout, int minimumClusterMembers, int executorPoolSize, long totalHeap, int percentToTrim, int trimDelay) {
 		this.localMemberSafeTimeout = localMemberSafeTimeout;
 		this.minimumClusterMembers = minimumClusterMembers;
 

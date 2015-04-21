@@ -15,10 +15,10 @@ public class MaxHeapTrimmer implements Runnable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MaxHeapTrimmer.class);
 
 	private final HazelcastInstance instance;
-	private final int totalHeap;
+	private final long totalHeap;
 	private final int percentToTrim;
 	
-	public MaxHeapTrimmer(HazelcastInstance instance, int totalHeap, int percentToTrim) {
+	public MaxHeapTrimmer(HazelcastInstance instance, long totalHeap, int percentToTrim) {
 		super();
 		this.instance = instance;
 		this.totalHeap = totalHeap;

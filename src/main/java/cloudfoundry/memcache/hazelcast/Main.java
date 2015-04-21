@@ -128,7 +128,7 @@ public class Main {
 			@Value("#{config['hazelcast']['local_member_safe_timeout']}") Long localMemberSafeTimeout,
 			@Value("#{config['hazelcast']['minimum_cluster_members']}") Integer minimumClusterMembers,
 			@Value("#{config['hazelcast']['executor_pool_size']}") Integer executorPoolSize,
-			@Value("#{config['hazelcast']['max_cache_size']}") Integer maxSize,
+			@Value("#{config['hazelcast']['max_cache_size']}") Long maxSize,
 			@Value("#{config['hazelcast']['percent_to_trim']}") Integer percentToTrim,
 			@Value("#{config['hazelcast']['trim_delay']}") Integer trimDelay) {
 		Config config = new Config();
