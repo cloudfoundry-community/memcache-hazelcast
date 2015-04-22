@@ -190,6 +190,11 @@ public class Main {
 			@Value("${host.password}") String password) {
 		return new HttpBasicAuthenticator("", username, password);
 	}
+	
+	@Bean
+	HazelcastVarzProducer varzProducer(HazelcastMemcacheMsgHandlerFactory hazelcastMsgFactory, @Value("#{config['hazelcast']['max_cache_size']}") Long maxSize) {
+		return new HazelcastVarzProducer(hazelcastMsgFactory.getInstance(), maxSize);
+	}
 
 	@Bean
 	MemcacheServer memcacheServer(MemcacheMsgHandlerFactory handlerFactory, AuthMsgHandlerFactory authFactory, @Value("#{config['memcache']['port']}") Integer port) {

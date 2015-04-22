@@ -63,6 +63,11 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		executor = new ScheduledThreadPoolExecutor(1);
 		executor.scheduleWithFixedDelay(new MaxHeapTrimmer(instance, totalHeap, percentToTrim), trimDelay, trimDelay, TimeUnit.SECONDS);
 	}
+	
+	@Override
+	public HazelcastInstance getInstance() {
+		return instance;
+	}
 
 	private void setupSerializables(Config config) {
 		config.getSerializationConfig().addDataSerializableFactory(1, (int id) -> (id == 1) ? new HazelcastGetCallable() : null);
