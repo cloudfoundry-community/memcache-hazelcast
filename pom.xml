@@ -3,7 +3,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>1.0.2.RELEASE</version>
+		<version>1.2.3.RELEASE</version>
 	</parent>
 
 	<modelVersion>4.0.0</modelVersion>
@@ -47,17 +47,12 @@
 		<dependency>
 			<groupId>com.github.cloudfoundry-community</groupId>
 			<artifactId>cf-spring</artifactId>
-			<version>0.3-SNAPSHOT</version>
+			<version>0.3</version>
 		</dependency>
 		<dependency>
 			<groupId>com.hazelcast</groupId>
 			<artifactId>hazelcast</artifactId>
 			<version>3.4.2</version>
-		</dependency>
-		<dependency>
-			<groupId>io.netty</groupId>
-			<artifactId>netty-codec-memcache</artifactId>
-			<version>4.1.0.Beta4</version>
 		</dependency>
 		<dependency>
 			<groupId>net.spy</groupId>
@@ -95,24 +90,6 @@
 			<version>3.3.1</version>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-log4j</artifactId>
-			<exclusions>
-				<exclusion>
-					<artifactId>slf4j-log4j12</artifactId>
-					<groupId>org.slf4j</groupId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-aop</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-batch</artifactId>
-		</dependency>
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
@@ -121,6 +98,12 @@
 				<artifactId>netty-all</artifactId>
 				<version>4.1.0.Beta4</version>
 			</dependency>
+			<dependency>
+				<groupId>org.apache.httpcomponents</groupId>
+				<artifactId>httpcomponents-core</artifactId>
+				<version>4.3.6</version>
+			</dependency>
+
 		</dependencies>
 	</dependencyManagement>
 </project>

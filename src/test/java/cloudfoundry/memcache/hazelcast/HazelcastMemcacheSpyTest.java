@@ -51,12 +51,10 @@ public class HazelcastMemcacheSpyTest {
 
 		 c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:"+localPort));
 //		 c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:11211"));
-		 
 	}
 	
 	@AfterClass
 	public void after() throws Exception {
-    	//Thread.sleep(1000000);
 		c.shutdown();
 		server.shutdown();
 	}
@@ -76,8 +74,6 @@ public class HazelcastMemcacheSpyTest {
 	
 	@Test
 	public void setWithExpiration() throws Exception {
-		long time = System.currentTimeMillis();
-		long expireTime = time+1000;
 		c.set("someKey", 1, "Some Data!").get();
 		Object value = c.get("someKey");
 		Assert.assertNotNull(value);

@@ -22,10 +22,13 @@ import cloudfoundry.memcache.AuthMsgHandler;
 import cloudfoundry.memcache.MemcacheMsgHandler;
 import cloudfoundry.memcache.MemcacheUtils;
 
+import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.IMap;
+import com.hazelcast.monitor.LocalMapStats;
+
 
 public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	
@@ -41,7 +44,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	final byte[] key;
 	final long cas;
 	long expirationInSeconds;
-	
 
 	public HazelcastMemcacheMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler, HazelcastInstance instance) {
 		this.authMsgHandler = authMsgHandler;
@@ -414,6 +416,84 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		STATS.put("bytes".getBytes(), (handler) -> {
 			return String.valueOf(handler.getCache().getLocalMapStats().getHeapCost());
 		});
+		STATS.put("limit_maxbytes".getBytes(), (handler) -> {
+			MapConfig mapConfig = handler.getInstance().getConfig().findMapConfig(handler.getCache().getName());
+			if(mapConfig == null) {
+				return null;
+			}
+			return String.valueOf(mapConfig.getMaxSizeConfig().getSize());
+		});
+		STATS.put("get_hits".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getHits());
+		});
+		STATS.put("get_misses".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getGetOperationCount()-mapStats.getHits());
+		});
+		STATS.put("backup_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getBackupCount());
+		});
+		STATS.put("size".getBytes(), (handler) -> {
+			return String.valueOf(handler.getCache().size());
+		});
+		STATS.put("owned_entry_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getOwnedEntryCount());
+		});
+		STATS.put("owned_entry_bytes".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getOwnedEntryMemoryCost());
+		});
+		STATS.put("backup_entry_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getBackupEntryCount());
+		});
+		STATS.put("backup_entry_bytes".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getBackupEntryMemoryCost());
+		});
+		STATS.put("get_operation_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getGetOperationCount());
+		});
+		STATS.put("put_operation_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getPutOperationCount());
+		});
+		STATS.put("remove_operation_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getRemoveOperationCount());
+		});
+		STATS.put("event_operation_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getEventOperationCount());
+		});
+		STATS.put("other_operation_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getOtherOperationCount());
+		});
+		STATS.put("total_operation_count".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.total());
+		});
+		STATS.put("max_get_latency".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getMaxGetLatency());
+		});
+		STATS.put("total_get_latency".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getTotalGetLatency());
+		});
+		STATS.put("total_put_latency".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getTotalPutLatency());
+		});
+		STATS.put("total_remove_latency".getBytes(), (handler) -> {
+			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
+			return String.valueOf(mapStats.getTotalRemoveLatency());
+		});
 	}
 
 	@Override
@@ -430,6 +510,9 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 
 	private void sendStat(ChannelHandlerContext ctx, int opaque, byte[] key, String value) {
+		if(value == null) {
+			return;
+		}
 		FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer(value.getBytes()));
 		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 		response.setOpcode(opcode);

@@ -80,8 +80,11 @@ public class MaxHeapTrimmer implements Runnable {
 				long totalCostEvicted = 0;
 				while(localEntryIterator.hasNext() && totalCostEvicted < bytesToRemove) {
 					LocalMapEntry entry = localEntryIterator.next();
-					map.evict(entry.key);
 					totalCostEvicted += entry.size;
+					//Don't evict the item if it puts it over the edge.  No need to drain small caches of everything they have.
+					if(totalCostEvicted < bytesToRemove) {
+						map.evict(entry.key);
+					}
 				}
 			}
 		}
