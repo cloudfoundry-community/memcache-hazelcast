@@ -42,7 +42,6 @@ public class HazelcastVarzProducer implements VarzProducer {
 		varz.put("cache_bytes_free", maxSize-stats.getHeapCost());
 		varz.put("cache_bytes_max", maxSize);
 		varz.put("total_caches", stats.getTotalCaches());
-		varz.put("hazelcast_backup_count", stats.getBackupCount());
 		varz.put("hazelcast_backup_entry_count", stats.getBackupEntryCount());
 		varz.put("hazelcast_backup_entry_memory_cost", stats.getBackupEntryMemoryCost());
 		varz.put("hazelcast_event_operation_count", stats.getEventOperationCount());
@@ -249,7 +248,6 @@ public class HazelcastVarzProducer implements VarzProducer {
 		@Override
 		public void fromJson(JsonObject json) {
 			throw new UnsupportedOperationException();
-			
 		}
 		
 		@Override
