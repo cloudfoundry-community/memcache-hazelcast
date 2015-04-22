@@ -28,6 +28,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import cf.nats.CfNats;
 import cf.nats.DefaultCfNats;
 import cf.nats.RouterRegisterHandler;
+import cf.spring.CfComponent;
+import cf.spring.HttpBasicAuthenticator;
 import cf.spring.NettyEventLoopGroupFactoryBean;
 import cf.spring.PidFileFactory;
 import cf.spring.config.YamlPropertyContextInitializer;
@@ -55,6 +57,7 @@ import com.hazelcast.config.TcpIpConfig;
 @Configuration
 @EnableAutoConfiguration
 @ComponentScan("cloudfoundry.memcache")
+@CfComponent(type = "MemcacheHazelcast", host = "#{environment['host.local']}", port = "#{environment['host.port']}")
 public class Main {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
@@ -148,39 +151,6 @@ public class Main {
 					mapConfig.setMaxSizeConfig(new MaxSizeConfig((Integer)planConfig.getValue(), MaxSizePolicy.USED_HEAP_SIZE));
 				}
 			}
-/*			EntryListenerConfig entryListenerConfig = new EntryListenerConfig();
-			entryListenerConfig.setImplementation(new EntryListener<String, HazelcastMemcacheCacheValue>() {
-				@Override
-				public void entryAdded(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
-					//System.out.println("Added entry with key: "+event.getKey());
-					
-				}
-				@Override
-				public void entryEvicted(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
-					//System.out.println("Evicted entry with key: "+event.getKey());
-				}
-				@Override
-				public void entryRemoved(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
-					// TODO Auto-generated method stub
-					
-				}
-				@Override
-				public void entryUpdated(EntryEvent<String, HazelcastMemcacheCacheValue> event) {
-					// TODO Auto-generated method stub
-					
-				}
-				@Override
-				public void mapCleared(MapEvent event) {
-					// TODO Auto-generated method stub
-					
-				}
-				@Override
-				public void mapEvicted(MapEvent event) {
-					// TODO Auto-generated method stub
-					
-				}
-			});
-			mapConfig.addEntryListenerConfig(entryListenerConfig);*/
 			config.addMapConfig(mapConfig);
 		}
 		NetworkConfig networkConfig = new NetworkConfig().setReuseAddress(true);
@@ -213,6 +183,12 @@ public class Main {
 			return new StubAuthMsgHandlerFactory();
 		}
 		return new SecretKeyAuthMsgHandlerFactory(key);
+	}
+	
+	@Bean
+	HttpBasicAuthenticator basicAuthenticator(@Value("${host.username}") String username,
+			@Value("${host.password}") String password) {
+		return new HttpBasicAuthenticator("", username, password);
 	}
 
 	@Bean

@@ -2,9 +2,7 @@ package cloudfoundry.memcache.hazelcast;
 
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -22,7 +20,6 @@ import com.hazelcast.config.Config;
 import com.hazelcast.config.ExecutorConfig;
 import com.hazelcast.config.ReplicatedMapConfig;
 import com.hazelcast.config.SerializerConfig;
-import com.hazelcast.core.DistributedObject;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
@@ -82,24 +79,12 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		return new HazelcastMemcacheMsgHandler(request, authMsgHandler, instance);
 	}
 
-	@Override
-	public List<String> getCaches() {
-		List<String> caches = new ArrayList<>();
-		for(DistributedObject object : instance.getDistributedObjects()) {
-			if(object instanceof IMap) {
-				caches.add(object.getName());
-			}
-		}
-		return caches;
-	}
-	
-	@Override
-	public void createCache(String name) {
-		instance.getMap(name);
-	}
-	
 	public void deleteCache(String name) {
-		instance.getMap(name).destroy();
+		IMap<Object, Object> map = instance.getMap(name);
+		if(map != null) {
+			LOGGER.info("Destroying cache: "+name);
+			map.destroy();
+		}
 	}
 
 	@Override

@@ -36,17 +36,6 @@ public class MaxHeapTrimmer implements Runnable {
 						IMap<?, ?> map = (IMap<?, ?>) object;
 						long heapCost = map.getLocalMapStats().getHeapCost();
 						totalUsed += heapCost;
-						if (heapCost == 0) {
-							// Cleanup maps that aren't storing anything.
-							if (map.size() == 0) {
-								try {
-									map.destroy();
-								} catch(Throwable t) {
-									LOGGER.warn("Ignoring unexpected error attempting to destory: "+map.getName(), t);
-								}
-							}
-							continue;
-						}
 					}
 				}
 				if (totalUsed > totalHeap) {
