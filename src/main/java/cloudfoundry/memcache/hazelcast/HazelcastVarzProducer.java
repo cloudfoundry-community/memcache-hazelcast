@@ -259,6 +259,5 @@ public class HazelcastVarzProducer implements VarzProducer {
 		public int getBackupCount() {
 			throw new UnsupportedOperationException();
 		}
-
 	}
 }
