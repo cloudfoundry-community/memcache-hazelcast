@@ -30,18 +30,18 @@ public class HazelcastVarzProducer implements VarzProducer {
 		Map<String, Object> varz = new HashMap<>();
 		MemoryStats memoryStats = new DefaultMemoryStats();
 		
-		varz.put("total_physical_bytes", memoryStats.getTotalPhysical());
-		varz.put("free_physical_bytes", memoryStats.getFreePhysical());
-		varz.put("used_physical_bytes", memoryStats.getTotalPhysical()-memoryStats.getFreePhysical());
-		varz.put("gc_collection_time_minor", memoryStats.getGCStats().getMinorCollectionTime());
-		varz.put("gc_collection_time_major", memoryStats.getGCStats().getMajorCollectionTime());
+		varz.put("hazelcast_total_physical_bytes", memoryStats.getTotalPhysical());
+		varz.put("hazelcast_free_physical_bytes", memoryStats.getFreePhysical());
+		varz.put("hazelcast_used_physical_bytes", memoryStats.getTotalPhysical()-memoryStats.getFreePhysical());
+		varz.put("hazelcast_gc_collection_time_minor", memoryStats.getGCStats().getMinorCollectionTime());
+		varz.put("hazelcast_gc_collection_time_major", memoryStats.getGCStats().getMajorCollectionTime());
 		
 		AggregateStats stats = buildAggregateStats();
 		
-		varz.put("cache_bytes_used", stats.getHeapCost());
-		varz.put("cache_bytes_free", maxSize-stats.getHeapCost());
-		varz.put("cache_bytes_max", maxSize);
-		varz.put("total_caches", stats.getTotalCaches());
+		varz.put("hazelcast_cache_bytes_used", stats.getHeapCost());
+		varz.put("hazelcast_cache_bytes_free", maxSize-stats.getHeapCost());
+		varz.put("hazelcast_cache_bytes_max", maxSize);
+		varz.put("hazelcast_total_caches", stats.getTotalCaches());
 		varz.put("hazelcast_backup_entry_count", stats.getBackupEntryCount());
 		varz.put("hazelcast_backup_entry_memory_cost", stats.getBackupEntryMemoryCost());
 		varz.put("hazelcast_event_operation_count", stats.getEventOperationCount());
