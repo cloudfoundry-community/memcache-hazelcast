@@ -1,6 +1,6 @@
 ---
 # Excluding scheme will default to https
-pidfile: /tmp/gateway.pid
+pidfile: /tmp/memcache-hazelcast.pid
 
 logging:
   level: INFO

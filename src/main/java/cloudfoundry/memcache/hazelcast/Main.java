@@ -204,7 +204,6 @@ public class Main {
 
 	@Bean
 	MemcacheServer memcacheServer(MemcacheMsgHandlerFactory handlerFactory, AuthMsgHandlerFactory authFactory, @Value("#{config['memcache']['port']}") Integer port) {
-		LOGGER.info("Memcached server starting on port: "+port);
 		MemcacheServer server = new MemcacheServer(handlerFactory, port, authFactory);
 		return server;
 	}
@@ -220,7 +219,7 @@ public class Main {
 		final LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
 		final Level level = Level.toLevel(applicationContext.getEnvironment().getProperty("logging.level"), Level.INFO);
 		loggerContext.getLogger("ROOT").setLevel(level);
-		LOGGER.info("Memcache server started");
+		LOGGER.info("Memcache server initialized.");
 	}
 
 }

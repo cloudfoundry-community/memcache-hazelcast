@@ -51,17 +51,29 @@ public class MemcacheServer {
 				.childOption(ChannelOption.TCP_NODELAY, true)
 				.childOption(ChannelOption.SO_KEEPALIVE, true);
 
-		try {
-			LOGGER.info("Waiting for the Hazelcast handler to be ready to accept connections.");
-			while(!msgHandlerFactory.isReady()) {
-				Thread.sleep(1000);
+		new Thread(new Runnable() {
+			public void run() {
+				try {
+					LOGGER.info("Waiting for the Memcache Backend to be ready to accept connections.");
+					while (!msgHandlerFactory.isReady() && !Thread.interrupted()) {
+						Thread.sleep(5000);
+						LOGGER.warn("Memcache backend still not ready.  Continuing to wait.");
+					}
+					if (msgHandlerFactory.isReady()) {
+						b.bind(port).sync();
+						LOGGER.info("Memcached server started on port: "+port);
+					} else {
+						LOGGER.error("Memcache server never got ready.  Terminating process.");
+						System.exit(1);
+					}
+				} catch (Throwable e) {
+					LOGGER.error("Memcache server never got ready.  Terminating process.", e);
+					System.exit(1);
+				}
 			}
-			b.bind(port).sync();
-		} catch (InterruptedException e) {
-			throw new IllegalStateException("Failed to start memcache server on port: "+port, e);
-		}
+		}).start();
 	}
-
+	
 	@PreDestroy
 	public void shutdown() {
 		LOGGER.info("Shutting down memcache server.");
