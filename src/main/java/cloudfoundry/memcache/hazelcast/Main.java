@@ -36,6 +36,7 @@ import cf.spring.config.YamlPropertyContextInitializer;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
 import cloudfoundry.memcache.AuthMsgHandlerFactory;
+import cloudfoundry.memcache.MemcacheHealthzHandlerMapping;
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
@@ -112,6 +113,11 @@ public class Main {
 	@Bean
 	public PidFileFactory pidFile(Environment environment) throws IOException {
 		return new PidFileFactory(environment.getProperty("pidfile"));
+	}
+	
+	@Bean
+	MemcacheHealthzHandlerMapping healthzHandlerMapping(MemcacheMsgHandlerFactory factory) {
+		return new MemcacheHealthzHandlerMapping(factory);
 	}
 
 	@Bean

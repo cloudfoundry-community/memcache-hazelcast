@@ -64,7 +64,6 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		executor.scheduleWithFixedDelay(new MaxHeapTrimmer(instance, totalHeap, percentToTrim), trimDelay, trimDelay, TimeUnit.SECONDS);
 	}
 	
-	@Override
 	public HazelcastInstance getInstance() {
 		return instance;
 	}
