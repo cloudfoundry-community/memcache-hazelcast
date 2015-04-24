@@ -56,8 +56,8 @@ public class MemcacheServer {
 				try {
 					LOGGER.info("Waiting for the Memcache Backend to be ready to accept connections.");
 					while (!msgHandlerFactory.isReady() && !Thread.interrupted()) {
+						LOGGER.warn("Memcache backend not ready.  Waiting 5 sec.");
 						Thread.sleep(5000);
-						LOGGER.warn("Memcache backend still not ready.  Continuing to wait.");
 					}
 					if (msgHandlerFactory.isReady()) {
 						b.bind(port).sync();

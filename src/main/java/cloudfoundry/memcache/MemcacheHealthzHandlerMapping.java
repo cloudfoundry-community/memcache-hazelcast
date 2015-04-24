@@ -10,8 +10,6 @@ import org.springframework.web.HttpRequestHandler;
 import org.springframework.web.servlet.handler.AbstractUrlHandlerMapping;
 
 public class MemcacheHealthzHandlerMapping extends AbstractUrlHandlerMapping {
-	private MemcacheMsgHandlerFactory factory;
-
 	public MemcacheHealthzHandlerMapping(MemcacheMsgHandlerFactory factory) {
 		setOrder(10);
 		registerHandler("/healthz", new HttpRequestHandler() {
@@ -22,6 +20,7 @@ public class MemcacheHealthzHandlerMapping extends AbstractUrlHandlerMapping {
 					httpServletResponse.getWriter().write("ok");
 				} else {
 					httpServletResponse.setStatus(503);
+					httpServletResponse.getWriter().write("down");
 				}
 			}
 		});
