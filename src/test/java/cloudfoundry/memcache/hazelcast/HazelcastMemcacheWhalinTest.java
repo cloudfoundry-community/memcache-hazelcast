@@ -44,7 +44,7 @@ public class HazelcastMemcacheWhalinTest {
 			};
 
 		// grab an instance of our connection pool
-		pool = SchoonerSockIOPool.getInstance(AuthInfo.plain("memcache-large-single|ea2b8e6c-5a55-4c6c-82ac-d9d067d08d74|368beb14-caaf-4dcf-9931-36beabe8fd24", "xuHXMEtxBXFVWsW0HLcK3YFbTn5EUpWYk4BHreA0R0QZOqZnx7Fsiffn/NoQk9y3"));
+		pool = SchoonerSockIOPool.getInstance(AuthInfo.plain("username", "password"));
 
 		// set the servers and the weights
 		pool.setServers( servers );
