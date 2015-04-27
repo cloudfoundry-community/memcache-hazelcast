@@ -138,12 +138,15 @@ public class HazelcastMemcacheSpyTest {
 
 	@Test
 	public void statBasic() throws Exception {
+		boolean containedAnEntry = false;
 		Map<SocketAddress, Map<String, String>> stats = c.getStats();
 		for(Map.Entry<SocketAddress, Map<String, String>> addressEntry : stats.entrySet()) {
 			System.out.println("Address: "+addressEntry.getKey());
 			for(Map.Entry<String, String> stat : addressEntry.getValue().entrySet()) {
+				containedAnEntry = true;
 				System.out.println(stat.getKey()+":"+stat.getValue());
 			}
 		}
+		Assert.assertTrue(containedAnEntry);
 	}
 }

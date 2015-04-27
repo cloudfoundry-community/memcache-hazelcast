@@ -51,7 +51,11 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		this.instance = instance;
 		this.opcode = request.opcode();
 		this.opaque = request.opaque();
-		this.key = request.key() == null ? null : request.key().getBytes();
+		try {
+			this.key = request.key() == null ? null : request.key().getBytes("UTF-8");
+		} catch (UnsupportedEncodingException e) {
+			throw new RuntimeException(e);
+		}
 		this.cas = request.cas();
 	}
 
@@ -112,23 +116,29 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					}
 				}
 
-				FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(new String(key), responseFlags, responseValue);
-				response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-				response.setOpcode(opcode);
-				response.setCas(value.getCAS());
-				response.setExtrasLength((byte)responseFlags.capacity());
-				response.setOpaque(opaque);
-				if (includeKey) {
-					response.setKeyLength((short) key.length);
-					response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity() + key.length);
-				} else {
-					response.setKey(null);
-					response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity());
+				try {
+					FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags, responseValue);
+					response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+					response.setOpcode(opcode);
+					response.setCas(value.getCAS());
+					response.setExtrasLength((byte) responseFlags.capacity());
+					response.setOpaque(opaque);
+					if (includeKey) {
+						String responseKey = new String(key, "UTF-8");
+						response.setKeyLength((short) responseKey.length());
+						response.setKey(responseKey);
+						response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity() + responseKey.length());
+					} else {
+						response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
+					}
+					ctx.writeAndFlush(response.retain());
+					if (LOGGER.isDebugEnabled()) {
+						LOGGER.debug("Current Socket: " + ctx.channel().id() + " Flushed response for key: " + key);
+					}
+				} catch (UnsupportedEncodingException e) {
+					throw new RuntimeException(e);
 				}
-				ctx.writeAndFlush(response.retain());
-				if(LOGGER.isDebugEnabled()) {
-					LOGGER.debug("Current Socket: "+ctx.channel().id()+" Flushed response for key: "+key);
-				}
+
 			}
 			
 			@Override
@@ -411,101 +421,101 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		return appendPrepend(ctx, content, false);
 	}
 
-	private static final Map<byte[], Stat> STATS;
+	private static final Map<String, Stat> STATS;
 
 	static {
 		STATS = new LinkedHashMap<>();
-		STATS.put("pid".getBytes(), (handler) -> {
+		STATS.put("pid", (handler) -> {
 			return ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
 		});
-		STATS.put("uptime".getBytes(), (handler) -> {
+		STATS.put("uptime", (handler) -> {
 			long startTime = (Long) handler.getInstance().getReplicatedMap(Stat.STAT_MAP).get(Stat.UPTIME_KEY);
 			return String.valueOf((System.currentTimeMillis() - startTime) / 1000);
 		});
-		STATS.put("time".getBytes(), (handler) -> {
+		STATS.put("time", (handler) -> {
 			return String.valueOf(System.currentTimeMillis() / 1000);
 		});
-		STATS.put("version".getBytes(), (handler) -> {
+		STATS.put("version", (handler) -> {
 			return "1.0";
 		});
-		STATS.put("bytes".getBytes(), (handler) -> {
+		STATS.put("bytes", (handler) -> {
 			return String.valueOf(handler.getCache().getLocalMapStats().getHeapCost());
 		});
-		STATS.put("limit_maxbytes".getBytes(), (handler) -> {
+		STATS.put("limit_maxbytes", (handler) -> {
 			MapConfig mapConfig = handler.getInstance().getConfig().findMapConfig(handler.getCache().getName());
 			if(mapConfig == null) {
 				return null;
 			}
 			return String.valueOf(mapConfig.getMaxSizeConfig().getSize());
 		});
-		STATS.put("get_hits".getBytes(), (handler) -> {
+		STATS.put("get_hits", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getHits());
 		});
-		STATS.put("get_misses".getBytes(), (handler) -> {
+		STATS.put("get_misses", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getGetOperationCount()-mapStats.getHits());
 		});
-		STATS.put("backup_count".getBytes(), (handler) -> {
+		STATS.put("backup_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getBackupCount());
 		});
-		STATS.put("size".getBytes(), (handler) -> {
+		STATS.put("size", (handler) -> {
 			return String.valueOf(handler.getCache().size());
 		});
-		STATS.put("owned_entry_count".getBytes(), (handler) -> {
+		STATS.put("owned_entry_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getOwnedEntryCount());
 		});
-		STATS.put("owned_entry_bytes".getBytes(), (handler) -> {
+		STATS.put("owned_entry_bytes", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getOwnedEntryMemoryCost());
 		});
-		STATS.put("backup_entry_count".getBytes(), (handler) -> {
+		STATS.put("backup_entry_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getBackupEntryCount());
 		});
-		STATS.put("backup_entry_bytes".getBytes(), (handler) -> {
+		STATS.put("backup_entry_bytes", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getBackupEntryMemoryCost());
 		});
-		STATS.put("get_operation_count".getBytes(), (handler) -> {
+		STATS.put("get_operation_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getGetOperationCount());
 		});
-		STATS.put("put_operation_count".getBytes(), (handler) -> {
+		STATS.put("put_operation_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getPutOperationCount());
 		});
-		STATS.put("remove_operation_count".getBytes(), (handler) -> {
+		STATS.put("remove_operation_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getRemoveOperationCount());
 		});
-		STATS.put("event_operation_count".getBytes(), (handler) -> {
+		STATS.put("event_operation_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getEventOperationCount());
 		});
-		STATS.put("other_operation_count".getBytes(), (handler) -> {
+		STATS.put("other_operation_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getOtherOperationCount());
 		});
-		STATS.put("total_operation_count".getBytes(), (handler) -> {
+		STATS.put("total_operation_count", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.total());
 		});
-		STATS.put("max_get_latency".getBytes(), (handler) -> {
+		STATS.put("max_get_latency", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getMaxGetLatency());
 		});
-		STATS.put("total_get_latency".getBytes(), (handler) -> {
+		STATS.put("total_get_latency", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getTotalGetLatency());
 		});
-		STATS.put("total_put_latency".getBytes(), (handler) -> {
+		STATS.put("total_put_latency", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getTotalPutLatency());
 		});
-		STATS.put("total_remove_latency".getBytes(), (handler) -> {
+		STATS.put("total_remove_latency", (handler) -> {
 			LocalMapStats mapStats = handler.getCache().getLocalMapStats();
 			return String.valueOf(mapStats.getTotalRemoveLatency());
 		});
@@ -515,31 +525,31 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	public boolean stat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		if (key != null) {
-			sendStat(ctx, opaque, key, STATS.get(key).getStat(this));
+			try {
+				sendStat(ctx, opaque, new String(key, "UTF-8"), STATS.get(key).getStat(this));
+			} catch (UnsupportedEncodingException e) {
+				throw new RuntimeException(e);
+			}
 		} else {
-			for (Map.Entry<byte[], Stat> stat : STATS.entrySet()) {
+			for (Map.Entry<String, Stat> stat : STATS.entrySet()) {
 				sendStat(ctx, opaque, stat.getKey(), stat.getValue().getStat(this));
 			}
 		}
 		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
 	}
 
-	private void sendStat(ChannelHandlerContext ctx, int opaque, byte[] key, String value) {
+	private void sendStat(ChannelHandlerContext ctx, int opaque, String statKey, String value) {
 		if(value == null) {
 			return;
 		}
-		try {
-			FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(new String(key, "UTF-8"), null,
-					Unpooled.wrappedBuffer(value.getBytes()));
-			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-			response.setOpcode(opcode);
-			response.setKeyLength((short) key.length);
-			response.setOpaque(opaque);
-			response.setTotalBodyLength(key.length + value.length());
-			ctx.writeAndFlush(response.retain());
-		} catch (UnsupportedEncodingException e) {
-			throw new RuntimeException(e);
-		}
+		FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(statKey, null,
+				Unpooled.wrappedBuffer(value.getBytes()));
+		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+		response.setOpcode(opcode);
+		response.setKeyLength((short) statKey.length());
+		response.setOpaque(opaque);
+		response.setTotalBodyLength(statKey.length() + value.length());
+		ctx.writeAndFlush(response.retain());
 	}
 
 	@Override
@@ -588,20 +598,39 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 							}
 							return;
 						}
-						FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, msg.getValue().getFlags(), msg.getValue().getValue());
-						response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-						response.setOpcode(opcode);
-						response.setCas(msg.getValue().getCAS());
-						response.setExtrasLength(msg.getValue().getFlagLength());
-						response.setOpaque(opaque);
-						if (opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ) {
-							response.setKey(new String(key));
-							response.setKeyLength((short) key.length);
-							response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength() + key.length);
-						} else {
-							response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
+						HazelcastMemcacheCacheValue value = msg.getValue();
+						ByteBuf responseValue = value.getValue();
+						ByteBuf responseFlags = value.getFlags();
+						
+						if(value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
+							long incDecValue = value.getValue().readLong();
+							try {
+								responseValue = Unpooled.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes("UTF-8"));
+								responseFlags = Unpooled.wrappedBuffer(new byte[4]);
+							} catch (UnsupportedEncodingException e) {
+								throw new RuntimeException(e);
+							}
 						}
-						ctx.writeAndFlush(response.retain());
+
+						try {
+							FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags, responseValue);
+							response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+							response.setOpcode(opcode);
+							response.setCas(msg.getValue().getCAS());
+							response.setExtrasLength(msg.getValue().getFlagLength());
+							response.setOpaque(opaque);
+							if (opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ) {
+								String responseKey = new String(key, "UTF-8");
+								response.setKey(responseKey);
+								response.setKeyLength((short) responseKey.length());
+								response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity() + responseKey.length());
+							} else {
+								response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity());
+							}
+							ctx.writeAndFlush(response.retain());
+						} catch (UnsupportedEncodingException e) {
+							throw new RuntimeException(e);
+						}
 					}
 
 					public void onFailure(Throwable t) {
