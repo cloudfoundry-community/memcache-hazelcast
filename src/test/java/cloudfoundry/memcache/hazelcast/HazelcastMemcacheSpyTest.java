@@ -123,4 +123,10 @@ public class HazelcastMemcacheSpyTest {
 		Thread.sleep(3000);
 		Assert.assertNull(c.get("nothingHere2"));
 	}
+
+	@Test
+	public void incBasic() throws Exception {
+		Assert.assertEquals(c.incr("nothingHere2", 1, 1), 1);
+		Assert.assertEquals(c.incr("nothingHere2", 1, 1), 2);
+	}
 }

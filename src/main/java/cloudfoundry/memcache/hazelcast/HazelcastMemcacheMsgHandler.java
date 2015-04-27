@@ -281,8 +281,9 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					response.setOpaque(opaque);
 					response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
 					ctx.writeAndFlush(response.retain());
+				} else {
+					MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
 				}
-				MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
 			}
 
 			public void onFailure(Throwable t) {
