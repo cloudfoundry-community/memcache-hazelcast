@@ -139,7 +139,8 @@ public class Main {
 			@Value("#{config['hazelcast']['executor_pool_size']}") Integer executorPoolSize,
 			@Value("#{config['hazelcast']['max_cache_size']}") Long maxSize,
 			@Value("#{config['hazelcast']['percent_to_trim']}") Integer percentToTrim,
-			@Value("#{config['hazelcast']['trim_delay']}") Integer trimDelay) {
+			@Value("#{config['hazelcast']['trim_delay']}") Integer trimDelay,
+			@Value("#{config['hazelcast']['partition_count']}") Integer partitionCount) {
 		Config config = new Config();
 		for(Map.Entry<String, Map<String, Object>> plan : plans.entrySet()) {
 			MapConfig mapConfig = new MapConfig(plan.getKey()+"*");
@@ -180,7 +181,7 @@ public class Main {
 			}
 			partitionGroupConfig.addMemberGroupConfig(memberGroupConfig);
 		}
-		return new HazelcastMemcacheMsgHandlerFactory(config, localMemberSafeTimeout, minimumClusterMembers, executorPoolSize, maxSize, percentToTrim, trimDelay);
+		return new HazelcastMemcacheMsgHandlerFactory(config, localMemberSafeTimeout, minimumClusterMembers, executorPoolSize, maxSize, percentToTrim, trimDelay, partitionCount);
 	}
 
 	@Bean

@@ -34,7 +34,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	private final int minimumClusterMembers;
 	private final ScheduledExecutorService executor;
 
-	public HazelcastMemcacheMsgHandlerFactory(Config config, long localMemberSafeTimeout, int minimumClusterMembers, int executorPoolSize, long totalHeap, int percentToTrim, int trimDelay) {
+	public HazelcastMemcacheMsgHandlerFactory(Config config, long localMemberSafeTimeout, int minimumClusterMembers, int executorPoolSize, long totalHeap, int percentToTrim, int trimDelay, int partitionSize) {
 		this.localMemberSafeTimeout = localMemberSafeTimeout;
 		this.minimumClusterMembers = minimumClusterMembers;
 
@@ -48,6 +48,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.shutdownhook.enabled", "false");
 		config.setProperty("hazelcast.logging.type", "slf4j");
 		config.setProperty("hazelcast.version.check.enabled", "false");
+		config.setProperty("hazelcast.partition.count", Integer.toString(partitionSize));
 
 		ExecutorConfig executorConfig = new ExecutorConfig().setStatisticsEnabled( false );
 		if(executorPoolSize == 0) {
