@@ -18,15 +18,17 @@ public class HazelcastVarzProducer implements VarzProducer {
 
 	private final HazelcastInstance instance;
 	private final long maxSize;
+	private volatile Map<String, Long> previousOperationsCounts;
 
 	public HazelcastVarzProducer(HazelcastInstance instance, long maxSize) {
 		super();
 		this.instance = instance;
 		this.maxSize = maxSize;
+		previousOperationsCounts = new HashMap<>();
 	}
 
 	@Override
-	public Map<String, ?> produceVarz() {
+	public synchronized Map<String, ?> produceVarz() {
 		Map<String, Object> varz = new HashMap<>();
 		MemoryStats memoryStats = new DefaultMemoryStats();
 		
@@ -60,18 +62,22 @@ public class HazelcastVarzProducer implements VarzProducer {
 		varz.put("hazelcast_total_put_latency", stats.getTotalPutLatency());
 		varz.put("hazelcast_total_remove_latency", stats.getTotalRemoveLatency());
 		varz.put("hazelcast_total", stats.total());
+		varz.put("hazelcast_committed_memory_cost", stats.getCommittedMemoryCost());
+		varz.put("hazelcast_max_operations_cache", stats.getMaxOperationsCache());
+		varz.put("hazelcast_max_operations_count", stats.getMaxOperationsCount());
 
 		return varz;
 	}
 	
 	private AggregateStats buildAggregateStats() {
-		AggregateStats stats = new AggregateStats();
+		AggregateStats stats = new AggregateStats(previousOperationsCounts);
 		for (DistributedObject object : instance.getDistributedObjects()) {
 			if (object instanceof IMap) {
 				IMap<?, ?> map = (IMap<?, ?>) object;
-				stats.aggregateStats(map.getLocalMapStats());
+				stats.aggregateStats(instance, map);
 			}
 		}
+		previousOperationsCounts = stats.getOperationsCounts();
 		return stats;
 	}
 	
@@ -95,9 +101,20 @@ public class HazelcastVarzProducer implements VarzProducer {
 		private long totalPutLatency = 0;
 		private long totalRemoveLatency = 0;
 		private long total = 0;
-		private int totalCaches;
+		private int totalCaches = 0;
+		private long committedMemoryCost = 0;
+		private String maxOperationsCache;
+		private long maxOperationsCount;
+		private volatile Map<String, Long> previousOperationsCounts;
+		private Map<String, Long> operationsCounts = new HashMap<>();
 		
-		public void aggregateStats(LocalMapStats localStats) {
+		public AggregateStats(Map<String, Long> previousOperationsCounts) {
+			super();
+			this.previousOperationsCounts = previousOperationsCounts;
+		}
+
+		public void aggregateStats(HazelcastInstance instance, IMap<?, ?> map) {
+			LocalMapStats localStats = map.getLocalMapStats();
 			backupEntryCount += localStats.getBackupEntryCount();
 			backupEntryMemoryCost += localStats.getBackupEntryMemoryCost();
 			eventOperationCount += localStats.getEventOperationCount();
@@ -118,6 +135,17 @@ public class HazelcastVarzProducer implements VarzProducer {
 			totalRemoveLatency += localStats.getTotalRemoveLatency();
 			total += localStats.total();
 			totalCaches++;
+			committedMemoryCost += instance.getConfig().findMapConfig(map.getName()).getMaxSizeConfig().getSize();
+			long totalOperationsCount = getOperationCount+otherOperationCount+putOperationCount+removeOperationCount;
+			operationsCounts.put(map.getName(), totalOperationsCount);
+			long localMaxOperationsCount = totalOperationsCount;
+			if(previousOperationsCounts.containsKey(map.getName())) {
+				localMaxOperationsCount = totalOperationsCount-previousOperationsCounts.get(map.getName());
+			}
+			if(maxOperationsCount < localMaxOperationsCount) {
+				maxOperationsCount = localMaxOperationsCount;
+				maxOperationsCache = map.getName();
+			}
 		}
 		
 		@Override
@@ -219,6 +247,22 @@ public class HazelcastVarzProducer implements VarzProducer {
 		
 		public int getTotalCaches() {
 			return totalCaches;
+		}
+		
+		public long getCommittedMemoryCost() {
+			return committedMemoryCost;
+		}
+		
+		public String getMaxOperationsCache() {
+			return maxOperationsCache;
+		}
+		
+		public long getMaxOperationsCount() {
+			return maxOperationsCount;
+		}
+		
+		public Map<String, Long> getOperationsCounts() {
+			return operationsCounts;
 		}
 		
 		@Override
