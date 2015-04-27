@@ -48,7 +48,9 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.shutdownhook.enabled", "false");
 		config.setProperty("hazelcast.logging.type", "slf4j");
 		config.setProperty("hazelcast.version.check.enabled", "false");
-		config.setProperty("hazelcast.partition.count", Integer.toString(partitionSize));
+		if(partitionSize != 271) {
+			config.setProperty("hazelcast.partition.count", Integer.toString(partitionSize));
+		}
 
 		ExecutorConfig executorConfig = new ExecutorConfig().setStatisticsEnabled( false );
 		if(executorPoolSize == 0) {
