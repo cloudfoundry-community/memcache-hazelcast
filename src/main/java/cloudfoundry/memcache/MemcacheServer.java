@@ -22,6 +22,7 @@ public class MemcacheServer {
 	private EventLoopGroup bossGroup;
 	private EventLoopGroup workerGroup;
 	private boolean started = false;
+	private volatile boolean running = false;
 	private final int port;
 	private final AuthMsgHandlerFactory authMsgHandlerFactory;
 
@@ -62,9 +63,11 @@ public class MemcacheServer {
 					if (msgHandlerFactory.isReady()) {
 						b.bind(port).sync();
 						LOGGER.info("Memcached server started on port: "+port);
+						running = true;
 					} else {
 						LOGGER.error("Memcache server never got ready.  Terminating process.");
 						System.exit(1);
+						return;
 					}
 				} catch (Throwable e) {
 					LOGGER.error("Memcache server never got ready.  Terminating process.", e);
@@ -83,5 +86,12 @@ public class MemcacheServer {
 			LOGGER.info("Shutting down worker thread group.");
 			workerGroup.shutdownGracefully().awaitUninterruptibly();
 		}
+		running = false;
 	}
+
+	public boolean isRunning() {
+		return running;
+	}
+	
+
 }

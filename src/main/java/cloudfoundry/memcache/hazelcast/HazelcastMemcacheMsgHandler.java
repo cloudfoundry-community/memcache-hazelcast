@@ -11,6 +11,7 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 
+import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -97,19 +98,32 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
 					return;
 				}
+				
+				ByteBuf responseValue = value.getValue();
+				ByteBuf responseFlags = value.getFlags();
+				
+				if(value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
+					long incDecValue = value.getValue().readLong();
+					try {
+						responseValue = Unpooled.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes("UTF-8"));
+						responseFlags = Unpooled.wrappedBuffer(new byte[4]);
+					} catch (UnsupportedEncodingException e) {
+						throw new RuntimeException(e);
+					}
+				}
 
-				FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(new String(key), value.getFlags(), value.getValue());
+				FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(new String(key), responseFlags, responseValue);
 				response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 				response.setOpcode(opcode);
 				response.setCas(value.getCAS());
-				response.setExtrasLength(value.getFlagLength());
+				response.setExtrasLength((byte)responseFlags.capacity());
 				response.setOpaque(opaque);
 				if (includeKey) {
 					response.setKeyLength((short) key.length);
-					response.setTotalBodyLength(value.getTotalFlagsAndValueLength() + key.length);
+					response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity() + key.length);
 				} else {
 					response.setKey(null);
-					response.setTotalBodyLength(value.getTotalFlagsAndValueLength());
+					response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity());
 				}
 				ctx.writeAndFlush(response.retain());
 				if(LOGGER.isDebugEnabled()) {
@@ -514,12 +528,18 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		if(value == null) {
 			return;
 		}
-		FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer(value.getBytes()));
-		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-		response.setOpcode(opcode);
-		response.setOpaque(opaque);
-		response.setTotalBodyLength(key.length + value.length());
-		ctx.writeAndFlush(response.retain());
+		try {
+			FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(new String(key, "UTF-8"), null,
+					Unpooled.wrappedBuffer(value.getBytes()));
+			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+			response.setOpcode(opcode);
+			response.setKeyLength((short) key.length);
+			response.setOpaque(opaque);
+			response.setTotalBodyLength(key.length + value.length());
+			ctx.writeAndFlush(response.retain());
+		} catch (UnsupportedEncodingException e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override

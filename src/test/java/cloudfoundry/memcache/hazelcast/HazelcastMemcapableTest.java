@@ -35,6 +35,7 @@ public class HazelcastMemcapableTest {
 		System.out.println("Localport: " + localPort);
 		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory());
 		server.start();
+		Thread.sleep(1000);
 	}
 
 	@AfterClass
@@ -52,7 +53,7 @@ public class HazelcastMemcapableTest {
 		}
 		file.setExecutable(true);
 		
-		ProcessBuilder pb = new ProcessBuilder(file.getAbsolutePath(), "-h", "localhost", "-p", Integer.toString(localPort), "-b", "-v", "-t", "1000");
+		ProcessBuilder pb = new ProcessBuilder(file.getAbsolutePath(), "-h", "127.0.0.1", "-p", Integer.toString(localPort), "-b", "-v", "-t", "1000");
 		pb.redirectErrorStream(true);
 		pb.inheritIO();
 		Process process = pb.start();

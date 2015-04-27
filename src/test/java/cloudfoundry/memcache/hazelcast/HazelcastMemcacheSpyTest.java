@@ -1,6 +1,8 @@
 package cloudfoundry.memcache.hazelcast;
 
 import java.net.ServerSocket;
+import java.net.SocketAddress;
+import java.util.Map;
 import java.util.Random;
 
 import net.spy.memcached.AddrUtil;
@@ -61,6 +63,7 @@ public class HazelcastMemcacheSpyTest {
 
 	@Test
 	public void getBasic() throws Exception {
+		c.delete("nothingHereGet");
 		Assert.assertNull(c.get("nothingHereGet"));
 		c.set("nothingHereGet", 0, "Some Data!");
 		Assert.assertEquals(c.get("nothingHereGet"), "Some Data!");
@@ -84,7 +87,7 @@ public class HazelcastMemcacheSpyTest {
 	@Test
 	public void setWithTooSoonExpiration() throws Exception {
 		long time = System.currentTimeMillis();
-		c.set("someKey", (int)((time/1000)-100000), "Some Data!").get();
+		c.set("someKey", (int)((time/1000)-1000), "Some Data!").get();
 		Assert.assertNull(c.get("someKey"));
 	}
 
@@ -114,6 +117,7 @@ public class HazelcastMemcacheSpyTest {
 
 	@Test
 	public void gatBasic() throws Exception {
+		c.delete("nothingHere2");
 		Assert.assertNull(c.get("nothingHere2"));
 		c.set("nothingHere2", 4, "Some Data!");
 		Thread.sleep(3000);
@@ -126,7 +130,20 @@ public class HazelcastMemcacheSpyTest {
 
 	@Test
 	public void incBasic() throws Exception {
+		c.delete("nothingHere2");
 		Assert.assertEquals(c.incr("nothingHere2", 1, 1), 1);
 		Assert.assertEquals(c.incr("nothingHere2", 1, 1), 2);
+		Assert.assertEquals(c.get("nothingHere2"), "2");
+	}
+
+	@Test
+	public void statBasic() throws Exception {
+		Map<SocketAddress, Map<String, String>> stats = c.getStats();
+		for(Map.Entry<SocketAddress, Map<String, String>> addressEntry : stats.entrySet()) {
+			System.out.println("Address: "+addressEntry.getKey());
+			for(Map.Entry<String, String> stat : addressEntry.getValue().entrySet()) {
+				System.out.println(stat.getKey()+":"+stat.getValue());
+			}
+		}
 	}
 }
