@@ -34,7 +34,19 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	private final int minimumClusterMembers;
 	private final ScheduledExecutorService executor;
 
-	public HazelcastMemcacheMsgHandlerFactory(Config config, long localMemberSafeTimeout, int minimumClusterMembers, int executorPoolSize, long totalHeap, int percentToTrim, int trimDelay, int partitionSize) {
+	public HazelcastMemcacheMsgHandlerFactory(Config config,
+			long localMemberSafeTimeout,
+			int minimumClusterMembers,
+			int executorPoolSize,
+			long totalHeap,
+			int percentToTrim,
+			int trimDelay,
+			int partitionSize,
+			int ioThreadCount,
+			int operationThreadCount,
+			int operationGenericThreadCount,
+			int eventThreadCount,
+			int clientEventThreadCount) {
 		this.localMemberSafeTimeout = localMemberSafeTimeout;
 		this.minimumClusterMembers = minimumClusterMembers;
 
@@ -48,9 +60,12 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.shutdownhook.enabled", "false");
 		config.setProperty("hazelcast.logging.type", "slf4j");
 		config.setProperty("hazelcast.version.check.enabled", "false");
-		if(partitionSize != 271) {
-			config.setProperty("hazelcast.partition.count", Integer.toString(partitionSize));
-		}
+		config.setProperty("hazelcast.io.thread.count", Integer.toString(ioThreadCount));
+		config.setProperty("hazelcast.operation.thread.count", Integer.toString(operationThreadCount));
+		config.setProperty("hazelcast.operation.generic.thread.count", Integer.toString(operationGenericThreadCount));
+		config.setProperty("hazelcast.event.thread.count", Integer.toString(eventThreadCount));
+		config.setProperty("hazelcast.client.event.thread.count", Integer.toString(clientEventThreadCount));
+		config.setProperty("hazelcast.partition.count", Integer.toString(partitionSize));
 
 		ExecutorConfig executorConfig = new ExecutorConfig().setStatisticsEnabled( false );
 		if(executorPoolSize == 0) {

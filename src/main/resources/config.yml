@@ -18,6 +18,11 @@ hazelcast:
   percent_to_trim: 20
   trim_delay: 10
   partition_count: 271
+  io_thread_count: 3
+  operation_thread_count: -1
+  operation_generic_thread_count: -1
+  event_thread_count: 5
+  client_event_thread_count: 5
   machines:
     rz1:
     - 127.0.0.1

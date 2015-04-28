@@ -140,7 +140,12 @@ public class Main {
 			@Value("#{config['hazelcast']['max_cache_size']}") Long maxSize,
 			@Value("#{config['hazelcast']['percent_to_trim']}") Integer percentToTrim,
 			@Value("#{config['hazelcast']['trim_delay']}") Integer trimDelay,
-			@Value("#{config['hazelcast']['partition_count']}") Integer partitionCount) {
+			@Value("#{config['hazelcast']['partition_count']}") Integer partitionCount,
+			@Value("#{config['hazelcast']['io_thread_count']}") Integer ioThreadCount,
+			@Value("#{config['hazelcast']['operation_thread_count']}") Integer operationThreadCount,
+			@Value("#{config['hazelcast']['operation_generic_thread_count']}") Integer operationGenericThreadCount,
+			@Value("#{config['hazelcast']['event_thread_count']}") Integer eventThreadCount,
+			@Value("#{config['hazelcast']['client_event_thread_count']}") Integer clientEventThreadCount) {
 		Config config = new Config();
 		for(Map.Entry<String, Map<String, Object>> plan : plans.entrySet()) {
 			MapConfig mapConfig = new MapConfig(plan.getKey()+"*");
@@ -181,7 +186,7 @@ public class Main {
 			}
 			partitionGroupConfig.addMemberGroupConfig(memberGroupConfig);
 		}
-		return new HazelcastMemcacheMsgHandlerFactory(config, localMemberSafeTimeout, minimumClusterMembers, executorPoolSize, maxSize, percentToTrim, trimDelay, partitionCount);
+		return new HazelcastMemcacheMsgHandlerFactory(config, localMemberSafeTimeout, minimumClusterMembers, executorPoolSize, maxSize, percentToTrim, trimDelay, partitionCount, ioThreadCount, operationThreadCount, operationGenericThreadCount, eventThreadCount, clientEventThreadCount);
 	}
 
 	@Bean
