@@ -60,6 +60,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.shutdownhook.enabled", "false");
 		config.setProperty("hazelcast.logging.type", "slf4j");
 		config.setProperty("hazelcast.version.check.enabled", "false");
+		config.setProperty("hazelcast.backpressure.enabled", "true");
 		config.setProperty("hazelcast.io.thread.count", Integer.toString(ioThreadCount));
 		config.setProperty("hazelcast.operation.thread.count", Integer.toString(operationThreadCount));
 		config.setProperty("hazelcast.operation.generic.thread.count", Integer.toString(operationGenericThreadCount));
