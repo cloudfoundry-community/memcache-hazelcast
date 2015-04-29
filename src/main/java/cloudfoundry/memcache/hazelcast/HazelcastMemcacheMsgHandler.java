@@ -143,7 +143,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			
 			@Override
 			public void onFailure(Throwable t) {
-				LOGGER.error("Error invoking GET asyncronously", t);
+				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
 			}
 		});
@@ -209,7 +209,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 						}
 
 						public void onFailure(Throwable t) {
-							LOGGER.error("Error invoking GET asyncronously", t);
+							LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 							MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 						}
 					});
@@ -258,7 +258,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 
 			public void onFailure(Throwable t) {
-				LOGGER.error("Error invoking GET asyncronously", t);
+				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 			}
 		});
@@ -311,7 +311,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 
 			public void onFailure(Throwable t) {
-				LOGGER.error("Error invoking GET asyncronously", t);
+				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 			}
 		});
@@ -356,6 +356,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	@Override
 	public boolean version(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
+		System.out.println("Checking Version. "+ctx.channel().id());
 		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, "CF Memcache 1.0").send(ctx);
 	}
 
@@ -571,7 +572,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					}
 
 					public void onFailure(Throwable t) {
-						LOGGER.error("Error invoking GET asyncronously", t);
+						LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 						MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 					}
 				});
@@ -634,7 +635,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					}
 
 					public void onFailure(Throwable t) {
-						LOGGER.error("Error invoking GET asyncronously", t);
+						LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 						MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 					}
 				});
