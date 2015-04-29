@@ -356,7 +356,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	@Override
 	public boolean version(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		System.out.println("Checking Version. "+ctx.channel().id());
 		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, "CF Memcache 1.0").send(ctx);
 	}
 
