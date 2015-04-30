@@ -119,9 +119,9 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
                     live = false;
                     return;
                 }
-                int selectedKeyCount;
+                int selectedKeyCount = 0;
                 try {
-                    selectedKeyCount = selector.select(waitTime);
+                	if(this instanceof InSelectorImpl) selectedKeyCount = selector.select(waitTime);
                 } catch (Throwable e) {
                     handleSelectFailure(e);
                     continue;
@@ -150,7 +150,12 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
     protected abstract void handleSelectionKey(SelectionKey sk);
 
     private void handleSelectionKeys() {
-        final Set<SelectionKey> setSelectedKeys = selector.selectedKeys();
+        final Set<SelectionKey> setSelectedKeys;
+        if(this instanceof InSelectorImpl) {
+        	setSelectedKeys = selector.selectedKeys();
+        } else {
+        	setSelectedKeys = selector.keys();
+        }
         final Iterator<SelectionKey> it = setSelectedKeys.iterator();
         while (it.hasNext()) {
             final SelectionKey sk = it.next();
