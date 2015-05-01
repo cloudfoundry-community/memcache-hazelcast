@@ -153,17 +153,26 @@ public abstract class AbstractIOSelector extends Thread implements IOSelector {
         final Set<SelectionKey> setSelectedKeys;
         if(this instanceof InSelectorImpl) {
         	setSelectedKeys = selector.selectedKeys();
+            final Iterator<SelectionKey> it = setSelectedKeys.iterator();
+            while (it.hasNext()) {
+                final SelectionKey sk = it.next();
+                it.remove();
+                try {
+                    handleSelectionKey(sk);
+                } catch (Throwable e) {
+                    handleSelectionKeyFailure(e);
+                }
+            }
         } else {
         	setSelectedKeys = selector.keys();
-        }
-        final Iterator<SelectionKey> it = setSelectedKeys.iterator();
-        while (it.hasNext()) {
-            final SelectionKey sk = it.next();
-            it.remove();
-            try {
-                handleSelectionKey(sk);
-            } catch (Throwable e) {
-                handleSelectionKeyFailure(e);
+            final Iterator<SelectionKey> it = setSelectedKeys.iterator();
+            while (it.hasNext()) {
+                final SelectionKey sk = it.next();
+                try {
+                    handleSelectionKey(sk);
+                } catch (Throwable e) {
+                    handleSelectionKeyFailure(e);
+                }
             }
         }
     }
