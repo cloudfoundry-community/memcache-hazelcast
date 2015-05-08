@@ -3,10 +3,10 @@
 pidfile: /tmp/memcache-hazelcast.pid
 
 logging:
-  level: DEBUG
+  level: INFO
 
 memcache:
-  port: 54913
+  port: 54914
   secret_key: 
 
 hazelcast:
@@ -23,6 +23,7 @@ hazelcast:
   operation_generic_thread_count: -1
   event_thread_count: 5
   client_event_thread_count: 5
+  max_no_heartbeat_seconds: 300
   machines:
     rz1:
     - 127.0.0.1
@@ -30,7 +31,7 @@ hazelcast:
 host:
   local: 10.255.196.31
   public: memcache.cf-dev.lds.org
-  port: 20080
+  port: 20081
   username: basic
   password: password
 

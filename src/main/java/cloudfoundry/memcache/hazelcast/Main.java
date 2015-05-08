@@ -145,7 +145,8 @@ public class Main {
 			@Value("#{config['hazelcast']['operation_thread_count']}") Integer operationThreadCount,
 			@Value("#{config['hazelcast']['operation_generic_thread_count']}") Integer operationGenericThreadCount,
 			@Value("#{config['hazelcast']['event_thread_count']}") Integer eventThreadCount,
-			@Value("#{config['hazelcast']['client_event_thread_count']}") Integer clientEventThreadCount) {
+			@Value("#{config['hazelcast']['client_event_thread_count']}") Integer clientEventThreadCount,
+			@Value("#{config['hazelcast']['max_no_heartbeat_seconds']}") Integer maxNoHeartbeatSeconds) {
 		Config config = new Config();
 		for(Map.Entry<String, Map<String, Object>> plan : plans.entrySet()) {
 			MapConfig mapConfig = new MapConfig(plan.getKey()+"*");
@@ -168,7 +169,7 @@ public class Main {
 		NetworkConfig networkConfig = new NetworkConfig().setReuseAddress(true);
 		config.setNetworkConfig(networkConfig);
 		networkConfig.setPort(port);
-		networkConfig.setPortAutoIncrement(false);
+		networkConfig.setPortAutoIncrement(true);
 		JoinConfig joinConfig = new JoinConfig();
 		networkConfig.setJoin(joinConfig);
 		joinConfig.setMulticastConfig(new MulticastConfig().setEnabled(false));
@@ -186,7 +187,7 @@ public class Main {
 			}
 			partitionGroupConfig.addMemberGroupConfig(memberGroupConfig);
 		}
-		return new HazelcastMemcacheMsgHandlerFactory(config, localMemberSafeTimeout, minimumClusterMembers, executorPoolSize, maxSize, percentToTrim, trimDelay, partitionCount, ioThreadCount, operationThreadCount, operationGenericThreadCount, eventThreadCount, clientEventThreadCount);
+		return new HazelcastMemcacheMsgHandlerFactory(config, localMemberSafeTimeout, minimumClusterMembers, executorPoolSize, maxSize, percentToTrim, trimDelay, partitionCount, ioThreadCount, operationThreadCount, operationGenericThreadCount, eventThreadCount, clientEventThreadCount, maxNoHeartbeatSeconds);
 	}
 
 	@Bean

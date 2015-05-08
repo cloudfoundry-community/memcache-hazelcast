@@ -46,7 +46,8 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 			int operationThreadCount,
 			int operationGenericThreadCount,
 			int eventThreadCount,
-			int clientEventThreadCount) {
+			int clientEventThreadCount,
+			int maxNoHeartbeatSeconds) {
 		this.localMemberSafeTimeout = localMemberSafeTimeout;
 		this.minimumClusterMembers = minimumClusterMembers;
 
@@ -68,6 +69,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.event.thread.count", Integer.toString(eventThreadCount));
 		config.setProperty("hazelcast.client.event.thread.count", Integer.toString(clientEventThreadCount));
 		config.setProperty("hazelcast.partition.count", Integer.toString(partitionSize));
+		config.setProperty("hazelcast.max.no.heartbeat.seconds", Integer.toString(maxNoHeartbeatSeconds));
 
 		ExecutorConfig executorConfig = new ExecutorConfig().setStatisticsEnabled( false );
 		if(executorPoolSize == 0) {
