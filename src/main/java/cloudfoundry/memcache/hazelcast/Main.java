@@ -169,7 +169,7 @@ public class Main {
 		NetworkConfig networkConfig = new NetworkConfig().setReuseAddress(true);
 		config.setNetworkConfig(networkConfig);
 		networkConfig.setPort(port);
-		networkConfig.setPortAutoIncrement(true);
+		networkConfig.setPortAutoIncrement(false);
 		JoinConfig joinConfig = new JoinConfig();
 		networkConfig.setJoin(joinConfig);
 		joinConfig.setMulticastConfig(new MulticastConfig().setEnabled(false));
