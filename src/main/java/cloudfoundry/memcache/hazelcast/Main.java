@@ -50,6 +50,8 @@ import com.hazelcast.config.MaxSizeConfig;
 import com.hazelcast.config.MaxSizeConfig.MaxSizePolicy;
 import com.hazelcast.config.MemberGroupConfig;
 import com.hazelcast.config.MulticastConfig;
+import com.hazelcast.config.NearCacheConfig;
+import com.hazelcast.config.NearCacheConfig.LocalUpdatePolicy;
 import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.config.PartitionGroupConfig;
 import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
@@ -68,6 +70,9 @@ public class Main {
 	private static final String EVICTION_POLICY_KEY = "eviction_policy";
 	private static final String MAX_IDLE_SECONDS_KEY = "max_idle_seconds";
 	private static final String MAX_SIZE_USED_HEAP_KEY = "max_size_used_heap";
+	private static final String NEAR_CACHE_KEY = "near_cache";
+	private static final String TTL_SECONDS_KEY = "ttl_seconds";
+	private static final String MAX_SIZE_KEY = "max_size";
 
 	@Bean
 	TaskExecutor executor() {
@@ -162,6 +167,24 @@ public class Main {
 					mapConfig.setMaxIdleSeconds((Integer)planConfig.getValue());
 				} else if(MAX_SIZE_USED_HEAP_KEY.equals(planConfig.getKey())) {
 					mapConfig.setMaxSizeConfig(new MaxSizeConfig((Integer)planConfig.getValue(), MaxSizePolicy.USED_HEAP_SIZE));
+				} else if(NEAR_CACHE_KEY.equals(planConfig.getKey())) {
+					Map<String, Object> nearPlanConfigs = (Map<String, Object>)planConfig.getValue();
+					NearCacheConfig nearCacheConfig = new NearCacheConfig();
+					nearCacheConfig.setInvalidateOnChange(true);
+					nearCacheConfig.setCacheLocalEntries(false);
+					nearCacheConfig.setLocalUpdatePolicy(LocalUpdatePolicy.INVALIDATE);
+					for(Map.Entry<String, Object> nearPlanConfig : nearPlanConfigs.entrySet()) {
+						if(MAX_SIZE_KEY.equals(nearPlanConfig.getKey())) {
+							nearCacheConfig.setMaxSize((Integer)nearPlanConfig.getValue());
+						} else if(TTL_SECONDS_KEY.equals(nearPlanConfig.getKey())) {
+							nearCacheConfig.setTimeToLiveSeconds((Integer)nearPlanConfig.getValue());
+						} else if(MAX_IDLE_SECONDS_KEY.equals(nearPlanConfig.getKey())) {
+							nearCacheConfig.setMaxIdleSeconds((Integer)nearPlanConfig.getValue());
+						} else if(EVICTION_POLICY_KEY.equals(nearPlanConfig.getKey())) {
+							nearCacheConfig.setEvictionPolicy((String)nearPlanConfig.getValue());
+						}
+					}
+					mapConfig.setNearCacheConfig(nearCacheConfig);
 				}
 			}
 			config.addMapConfig(mapConfig);
