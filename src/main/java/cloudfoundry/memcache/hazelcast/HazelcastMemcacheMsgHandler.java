@@ -15,6 +15,7 @@ import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,7 @@ import cloudfoundry.memcache.MemcacheUtils;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.ICompletableFuture;
 import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.IMap;
 import com.hazelcast.monitor.LocalMapStats;
@@ -91,10 +93,12 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 		IExecutorService executor = getExecutor();
 
-		executor.submitToKeyOwner(new HazelcastGetCallable(authMsgHandler.getCacheName(), key), key, new ExecutionCallback<HazelcastMemcacheCacheValue>() {
+		IMap<byte[], HazelcastMemcacheCacheValue> map = getCache();
+		
+		ICompletableFuture<HazelcastMemcacheCacheValue> future = (ICompletableFuture<HazelcastMemcacheCacheValue>)map.getAsync(key);
+		ExecutionCallback<HazelcastMemcacheCacheValue> callback = new ExecutionCallback<HazelcastMemcacheCacheValue>() {
 			@Override
 			public void onResponse(HazelcastMemcacheCacheValue value) {
-			
 				if (value == null && opcode == nonQuietOpcode) {
 					MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
 					return;
@@ -102,10 +106,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
 					return;
 				}
-				
+
 				ByteBuf responseValue = value.getValue();
 				ByteBuf responseFlags = value.getFlags();
-				
+
 				if(value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
 					long incDecValue = value.getValue().readLong();
 					try {
@@ -146,8 +150,18 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
 			}
-		});
-
+		};
+		
+		if(future.isDone()) {
+			future.andThen(callback, new Executor() {
+				@Override
+				public void execute(Runnable command) {
+					command.run();
+				}
+			});
+		} else {
+			future.andThen(callback);
+		}
 		return false;
 	}
 
