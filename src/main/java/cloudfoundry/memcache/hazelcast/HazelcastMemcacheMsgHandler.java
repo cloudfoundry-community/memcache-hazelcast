@@ -91,8 +91,6 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	private boolean handleGetRequest(ChannelHandlerContext ctx, BinaryMemcacheRequest request, byte nonQuietOpcode, boolean includeKey) {
 		MemcacheUtils.logRequest(request);
 
-		IExecutorService executor = getExecutor();
-
 		IMap<byte[], HazelcastMemcacheCacheValue> map = getCache();
 		
 		ICompletableFuture<HazelcastMemcacheCacheValue> future = (ICompletableFuture<HazelcastMemcacheCacheValue>)map.getAsync(key);
@@ -162,6 +160,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		} else {
 			future.andThen(callback);
 		}
+
 		return false;
 	}
 
