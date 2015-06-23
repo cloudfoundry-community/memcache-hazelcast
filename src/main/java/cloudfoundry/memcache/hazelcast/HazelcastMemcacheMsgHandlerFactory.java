@@ -70,6 +70,8 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.client.event.thread.count", Integer.toString(clientEventThreadCount));
 		config.setProperty("hazelcast.partition.count", Integer.toString(partitionSize));
 		config.setProperty("hazelcast.max.no.heartbeat.seconds", Integer.toString(maxNoHeartbeatSeconds));
+		config.setProperty("hazelcast.max.no.heartbeat.seconds", "128");
+		config.setProperty("hazelcast.max.no.heartbeat.seconds", "128");
 
 		ExecutorConfig executorConfig = new ExecutorConfig().setStatisticsEnabled( false );
 		if(executorPoolSize == 0) {

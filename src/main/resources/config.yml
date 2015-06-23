@@ -52,6 +52,11 @@ plans:
     eviction_policy: LRU
     max_idle_seconds: 86400
     max_size_used_heap: 100
+    near_cache:
+      eviction_policy: LRU
+      max_size: 1000
+      ttl_seconds: 600
+      max_idle_seconds: 300
   large:
     backup: 0
     async_backup: 1
