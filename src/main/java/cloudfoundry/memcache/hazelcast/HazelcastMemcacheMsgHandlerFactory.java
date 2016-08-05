@@ -60,7 +60,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.rest.enabled", "false");
 		config.setProperty("hazelcast.shutdownhook.enabled", "false");
 		config.setProperty("hazelcast.logging.type", "slf4j");
-		config.setProperty("hazelcast.version.check.enabled", "false");
+		config.setProperty("hazelcast.phone.home.enabled", "false");
 		config.setProperty("hazelcast.backpressure.enabled", "true");
 		config.setProperty("hazelcast.jmx", "true");
 		config.setProperty("hazelcast.io.thread.count", Integer.toString(ioThreadCount));
@@ -125,7 +125,8 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 				LOGGER.warn("Hazelcast is not ready because this node is only connected to "+clusterSize+" of the required "+minimumClusterMembers+" cluster members." );
 			}
 		} else {
-			LOGGER.warn("Hazelcast is not ready because it is not currently running for some reason.");
+			LOGGER.error("Hazelcast is not ready because it is not currently running for some reason.  Shutting down now so that it restarts.");
+			System.exit(1);
 		}
 		return false;
 	}

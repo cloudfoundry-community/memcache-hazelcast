@@ -1,11 +1,12 @@
 package cloudfoundry.memcache;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheMessage;
 
 public class MemcacheRequestKey {
 	private final byte opcode;
 	private final int opaque;
-	private String key;
+	private ByteBuf key;
 	public MemcacheRequestKey(BinaryMemcacheMessage message) {
 		this.opcode = message.opcode();
 		this.opaque = message.opaque();

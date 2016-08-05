@@ -51,7 +51,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	@Override
 	public boolean startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		if (!SUPPORTED_SASL_MECHS.contains(request.key())) {
+		if (!SUPPORTED_SASL_MECHS.contains(request.key().toString())) {
 			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Authentication Mechanism: "+request.key()).send(ctx);
 		}
 		opaque = request.opaque();

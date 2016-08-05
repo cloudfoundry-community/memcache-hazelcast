@@ -19,7 +19,8 @@ public class MemcacheClient {
 
 		MemcachedClient c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:"+54913));
 		
-		c.set("dude", 0, "bob");
+		c.set("dude", 0, "bob").get();
+//		System.out.println("Done setting dude");
 		System.out.println(c.get("dude"));
 		c.shutdown();
 	}

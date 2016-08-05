@@ -63,9 +63,9 @@ public class HazelcastMemcacheSpyTest {
 
 	@Test
 	public void getBasic() throws Exception {
-		c.delete("nothingHereGet");
+		c.delete("nothingHereGet").get();
 		Assert.assertNull(c.get("nothingHereGet"));
-		c.set("nothingHereGet", 0, "Some Data!");
+		c.set("nothingHereGet", 0, "Some Data!").get();
 		Assert.assertEquals(c.get("nothingHereGet"), "Some Data!");
 	}
 
@@ -96,8 +96,9 @@ public class HazelcastMemcacheSpyTest {
 		byte[] data = new byte[20004857];
 		new Random().nextBytes(data);
 		try {
-			c.set("BigValue", 0, data).get();
-			Assert.fail();
+			if(c.set("BigValue", 0, data).get()) {
+				Assert.fail();
+			}
 		} catch(Exception e) {
 			//success
 		}
@@ -106,9 +107,9 @@ public class HazelcastMemcacheSpyTest {
 	@Test
 	public void touchBasic() throws Exception {
 		Assert.assertNull(c.get("nothingHere"));
-		c.set("nothingHere", 4, "Some Data!");
+		c.set("nothingHere", 4, "Some Data!").get();
 		Thread.sleep(3000);
-		c.touch("nothingHere", 4);
+		c.touch("nothingHere", 4).get();
 		Thread.sleep(3000);
 		Assert.assertEquals(c.get("nothingHere"), "Some Data!");
 		Thread.sleep(3000);
@@ -117,9 +118,9 @@ public class HazelcastMemcacheSpyTest {
 
 	@Test
 	public void gatBasic() throws Exception {
-		c.delete("nothingHere2");
+		c.delete("nothingHere2").get();
 		Assert.assertNull(c.get("nothingHere2"));
-		c.set("nothingHere2", 4, "Some Data!");
+		c.set("nothingHere2", 4, "Some Data!").get();
 		Thread.sleep(3000);
 		Assert.assertEquals(c.getAndTouch("nothingHere2", 4).getValue(), "Some Data!");
 		Thread.sleep(3000);
@@ -130,7 +131,7 @@ public class HazelcastMemcacheSpyTest {
 
 	@Test
 	public void incBasic() throws Exception {
-		c.delete("nothingHere2");
+		c.delete("nothingHere2").get();
 		Assert.assertEquals(c.incr("nothingHere2", 1, 1), 1);
 		Assert.assertEquals(c.incr("nothingHere2", 1, 1), 2);
 		Assert.assertEquals(c.get("nothingHere2"), "2");

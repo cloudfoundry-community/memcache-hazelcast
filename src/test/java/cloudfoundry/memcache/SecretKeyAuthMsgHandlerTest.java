@@ -24,7 +24,7 @@ public class SecretKeyAuthMsgHandlerTest {
 	public void testAuthSuccess() {
 		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY);
 		assertFalse(authHandler.isAuthenticated());
-		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest("PLAIN");
+		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
 		request.setOpaque(1234);
 		request.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
 		String username = "plan"+UUID.randomUUID().toString();
@@ -48,7 +48,7 @@ public class SecretKeyAuthMsgHandlerTest {
 	public void testAuthFailure() {
 		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY);
 		assertFalse(authHandler.isAuthenticated());
-		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest("PLAIN");
+		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
 		request.setOpaque(1234);
 		request.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
 		UUID appGuid = UUID.randomUUID();

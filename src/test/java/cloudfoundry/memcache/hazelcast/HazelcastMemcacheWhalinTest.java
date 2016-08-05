@@ -70,10 +70,12 @@ public class HazelcastMemcacheWhalinTest {
 		pool.setNagle( false );
 		pool.setSocketTO( 3000 );
 		pool.setSocketConnectTO( 0 );
-
+		
 		// initialize the connection pool
 		pool.initialize();
-		
+
+		//For some reason Whalin insists on going even though it doesn't have a connection.
+		Thread.sleep(5000);
 		c = new MemCachedClient(true, true);
 	}
 	

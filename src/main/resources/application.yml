@@ -1,0 +1,8 @@
+---
+logging:
+  level.cloudfoundry.memcache: INFO
+
+spring:
+  pid:
+    fail-on-write-error: true
+     

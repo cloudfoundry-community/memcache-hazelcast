@@ -1,0 +1,61 @@
+---
+spring:
+  pid:
+    file: /tmp/memcache-hazelcast.pid
+
+server:
+  port: 8080
+  tomcat:
+    basedir: /tmp/memcache-hazelcast
+
+memcache:
+  port: 54913
+  secretKey: 
+
+hazelcast:
+  port: 5701
+  localMemberSafeTimeout: 120
+  minimumClusterMembers: 1
+  executorPoolSize: 0
+  maxCacheSize: 536870912
+  percentToTrim: 20
+  trimDelay: 10
+  partitionCount: 271
+  ioThreadCount: 3
+  operationThreadCount: -1
+  operationGenericThreadCount: -1
+  eventThreadCount: 5
+  clientEventThreadCount: 5
+  maxNoHeartbeatSeconds: 300
+  machines:
+    rz1:
+    - 127.0.0.1
+
+host:
+  username: basic
+  password: password
+
+plans:
+  small:
+    backup: 0
+    asyncBackup: 0
+    evictionPolicy: LRU
+    maxIdleSeconds: 86400
+    maxSizeUsedHeap: 1000
+  medium:
+    backup: 0
+    asyncBackup: 1
+    evictionPolicy: LRU
+    maxIdleSeconds: 86400
+    maxSizeUsedHeap: 100
+    nearCache:
+      evictionPolicy: LRU
+      maxSize: 1000
+      ttlSeconds: 600
+      maxIdleSeconds: 300
+  large:
+    backup: 0
+    asyncBackup: 1
+    evictionPolicy: LRU
+    maxIdleSeconds: 86400
+    maxSizeUsedHeap: 1000
