@@ -11,6 +11,7 @@ import net.spy.memcached.ConnectionFactoryBuilder.Protocol;
 import net.spy.memcached.MemcachedClient;
 import net.spy.memcached.auth.AuthDescriptor;
 import net.spy.memcached.auth.PlainCallbackHandler;
+import net.spy.memcached.transcoders.SerializingTranscoder;
 
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
@@ -50,6 +51,9 @@ public class HazelcastMemcacheSpyTest {
 		binaryConnectionFactory.setShouldOptimize(false);
 		binaryConnectionFactory.setAuthWaitTime(10000000);
 		binaryConnectionFactory.setOpTimeout(10000000);
+		SerializingTranscoder t = new SerializingTranscoder();
+		t.setCompressionThreshold(Integer.MAX_VALUE);
+		binaryConnectionFactory.setTranscoder(t);
 
 		 c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:"+localPort));
 //		 c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:11211"));
