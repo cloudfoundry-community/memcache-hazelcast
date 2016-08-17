@@ -10,6 +10,9 @@
 	<groupId>org.github.cloudfoundry-community</groupId>
 	<artifactId>memcache-hazelcast</artifactId>
 	<version>1.0</version>
+	<properties>
+		<java.version>1.8</java.version>
+	</properties>
 	<build>
 		<finalName>${project.artifactId}</finalName>
 		<plugins>
@@ -18,18 +21,6 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
 		</plugins>
-		<pluginManagement>
-			<plugins>
-				<plugin>
-					<groupId>org.apache.maven.plugins</groupId>
-					<artifactId>maven-compiler-plugin</artifactId>
-					<configuration>
-						<source>1.8</source>
-						<target>1.8</target>
-					</configuration>
-				</plugin>
-			</plugins>
-		</pluginManagement>
 	</build>
 	<dependencies>
 		<dependency>

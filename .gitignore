@@ -4,3 +4,4 @@
 /target/
 /test-output/
 /.factorypath
+/.apt_generated/
