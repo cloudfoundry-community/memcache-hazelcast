@@ -132,7 +132,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				}
 
 			}
-			
+
 			@Override
 			public void onFailure(Throwable t) {
 				LOGGER.error("Error invoking "+opcode+" asyncronously", t);

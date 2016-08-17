@@ -38,16 +38,17 @@ public class Main {
 	@Bean
 	HazelcastMemcacheMsgHandlerFactory hazelcastconfig(MemcacheHazelcastConfig springConfig) {
 		Config config = new Config();
-		for(Map.Entry<String, MemcacheHazelcastConfig.Plan> plan : springConfig.getPlans().entrySet()) {
-			LOGGER.info("Configuring plan: "+plan.getKey());
-			MapConfig mapConfig = new MapConfig(plan.getKey()+"*");
+		for (Map.Entry<String, MemcacheHazelcastConfig.Plan> plan : springConfig.getPlans().entrySet()) {
+			LOGGER.info("Configuring plan: " + plan.getKey());
+			MapConfig mapConfig = new MapConfig(plan.getKey() + "*");
 			mapConfig.setStatisticsEnabled(true);
 			mapConfig.setBackupCount(plan.getValue().getBackup());
 			mapConfig.setAsyncBackupCount(plan.getValue().getAsyncBackup());
 			mapConfig.setEvictionPolicy(plan.getValue().getEvictionPolicy());
 			mapConfig.setMaxIdleSeconds(plan.getValue().getMaxIdleSeconds());
-			mapConfig.setMaxSizeConfig(new MaxSizeConfig(plan.getValue().getMaxSizeUsedHeap(), MaxSizePolicy.USED_HEAP_SIZE));
-			if(plan.getValue().getNearCache() != null) {
+			mapConfig.setMaxSizeConfig(
+					new MaxSizeConfig(plan.getValue().getMaxSizeUsedHeap(), MaxSizePolicy.USED_HEAP_SIZE));
+			if (plan.getValue().getNearCache() != null) {
 				NearCacheConfig nearCacheConfig = new NearCacheConfig();
 				nearCacheConfig.setInvalidateOnChange(true);
 				nearCacheConfig.setCacheLocalEntries(false);
@@ -73,33 +74,58 @@ public class Main {
 		config.setPartitionGroupConfig(partitionGroupConfig);
 		partitionGroupConfig.setEnabled(true);
 		partitionGroupConfig.setGroupType(MemberGroupType.CUSTOM);
-		for(Map.Entry<String, List<String>> zone : springConfig.getHazelcast().getMachines().entrySet()) {
+		for (Map.Entry<String, List<String>> zone : springConfig.getHazelcast().getMachines().entrySet()) {
 			MemberGroupConfig memberGroupConfig = new MemberGroupConfig();
-			for(String machine : zone.getValue()) {
+			for (String machine : zone.getValue()) {
 				tcpIpConfig.addMember(machine);
 				memberGroupConfig.addInterface(machine);
 			}
 			partitionGroupConfig.addMemberGroupConfig(memberGroupConfig);
 		}
-		return new HazelcastMemcacheMsgHandlerFactory(config, springConfig.getHazelcast().getLocalMemberSafeTimeout(), springConfig.getHazelcast().getMinimumClusterMembers(), springConfig.getHazelcast().getExecutorPoolSize(), springConfig.getHazelcast().getMaxCacheSize(), springConfig.getHazelcast().getPercentToTrim(), springConfig.getHazelcast().getTrimDelay(), springConfig.getHazelcast().getPartitionCount(), springConfig.getHazelcast().getIoThreadCount(), springConfig.getHazelcast().getOperationThreadCount(), springConfig.getHazelcast().getOperationGenericThreadCount(), springConfig.getHazelcast().getEventThreadCount(), springConfig.getHazelcast().getClientEventThreadCount(), springConfig.getHazelcast().getMaxNoHeartbeatSeconds());
+		config.setProperty("hazelcast.memcache.enabled", "false");
+		config.setProperty("hazelcast.rest.enabled", "false");
+		config.setProperty("hazelcast.shutdownhook.enabled", "false");
+		config.setProperty("hazelcast.logging.type", "slf4j");
+		config.setProperty("hazelcast.phone.home.enabled", "false");
+		config.setProperty("hazelcast.backpressure.enabled", "true");
+		config.setProperty("hazelcast.jmx", "true");
+		config.setProperty("hazelcast.io.thread.count", Integer.toString(springConfig.getHazelcast().getIoThreadCount()));
+		config.setProperty("hazelcast.operation.thread.count", Integer.toString(springConfig.getHazelcast().getOperationThreadCount()));
+		config.setProperty("hazelcast.operation.generic.thread.count", Integer.toString(springConfig.getHazelcast().getOperationGenericThreadCount()));
+		config.setProperty("hazelcast.event.thread.count", Integer.toString(springConfig.getHazelcast().getEventThreadCount()));
+		config.setProperty("hazelcast.client.event.thread.count", Integer.toString(springConfig.getHazelcast().getClientEventThreadCount()));
+		config.setProperty("hazelcast.partition.count", Integer.toString(springConfig.getHazelcast().getPartitionCount()));
+		config.setProperty("hazelcast.max.no.heartbeat.seconds", Integer.toString(springConfig.getHazelcast().getMaxNoHeartbeatSeconds()));
+		config.setProperty("hazelcast.operation.call.timeout.millis", Integer.toString(springConfig.getHazelcast().getOperationCallTimeout()));
+		config.setProperty("hazelcast.socket.receive.buffer.size", Integer.toString(springConfig.getHazelcast().getReceiveBufferSize()));
+		config.setProperty("hazelcast.socket.send.buffer.size", Integer.toString(springConfig.getHazelcast().getSendBufferSize()));
+		return new HazelcastMemcacheMsgHandlerFactory(config,
+				springConfig.getHazelcast().getLocalMemberSafeTimeout(),
+				springConfig.getHazelcast().getMinimumClusterMembers(),
+				springConfig.getHazelcast().getExecutorPoolSize(),
+				springConfig.getHazelcast().getMaxCacheSize(),
+				springConfig.getHazelcast().getPercentToTrim(),
+				springConfig.getHazelcast().getTrimDelay());
 	}
 
 	@Bean
 	AuthMsgHandlerFactory authHandlerFactory(MemcacheHazelcastConfig config) {
-		if(config.getMemcache().getSecretKey() == null || config.getMemcache().getSecretKey().isEmpty()) {
+		if (config.getMemcache().getSecretKey() == null || config.getMemcache().getSecretKey().isEmpty()) {
 			return new StubAuthMsgHandlerFactory();
 		}
 		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey());
 	}
-	
+
 	@Bean
 	HttpBasicAuthenticator basicAuthenticator(MemcacheHazelcastConfig config) {
 		return new HttpBasicAuthenticator("", config.getHost().getUsername(), config.getHost().getPassword());
 	}
 
 	@Bean
-	MemcacheServer memcacheServer(MemcacheMsgHandlerFactory handlerFactory, AuthMsgHandlerFactory authFactory, MemcacheHazelcastConfig config) {
-		MemcacheServer server = new MemcacheServer(handlerFactory, config.getMemcache().getPort(), authFactory, config.getMemcache().getMaxQueueSize());
+	MemcacheServer memcacheServer(MemcacheMsgHandlerFactory handlerFactory, AuthMsgHandlerFactory authFactory,
+			MemcacheHazelcastConfig config) {
+		MemcacheServer server = new MemcacheServer(handlerFactory, config.getMemcache().getPort(), authFactory,
+				config.getMemcache().getMaxQueueSize());
 		return server;
 	}
 

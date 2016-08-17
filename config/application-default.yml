@@ -10,7 +10,8 @@ server:
 
 memcache:
   port: 54913
-  secretKey: 
+  secretKey:
+  maxQueueSize: 1000
 
 hazelcast:
   port: 5701
@@ -27,6 +28,9 @@ hazelcast:
   eventThreadCount: 5
   clientEventThreadCount: 5
   maxNoHeartbeatSeconds: 300
+  operationCallTimeout: 5000
+  receiveBufferSize: 2048
+  sendBufferSize: 2048
   machines:
     rz1:
     - 127.0.0.1

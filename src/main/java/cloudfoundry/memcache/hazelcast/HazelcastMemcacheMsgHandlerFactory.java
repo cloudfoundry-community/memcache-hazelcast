@@ -40,14 +40,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 			int executorPoolSize,
 			long totalHeap,
 			int percentToTrim,
-			int trimDelay,
-			int partitionSize,
-			int ioThreadCount,
-			int operationThreadCount,
-			int operationGenericThreadCount,
-			int eventThreadCount,
-			int clientEventThreadCount,
-			int maxNoHeartbeatSeconds) {
+			int trimDelay) {
 		this.localMemberSafeTimeout = localMemberSafeTimeout;
 		this.minimumClusterMembers = minimumClusterMembers;
 
@@ -56,22 +49,6 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.getSerializationConfig().addSerializerConfig(serializerConfig);
 		setupSerializables(config);
 		config.addReplicatedMapConfig(new ReplicatedMapConfig().setName(Stat.STAT_MAP));
-		config.setProperty("hazelcast.memcache.enabled", "false");
-		config.setProperty("hazelcast.rest.enabled", "false");
-		config.setProperty("hazelcast.shutdownhook.enabled", "false");
-		config.setProperty("hazelcast.logging.type", "slf4j");
-		config.setProperty("hazelcast.phone.home.enabled", "false");
-		config.setProperty("hazelcast.backpressure.enabled", "true");
-		config.setProperty("hazelcast.jmx", "true");
-		config.setProperty("hazelcast.io.thread.count", Integer.toString(ioThreadCount));
-		config.setProperty("hazelcast.operation.thread.count", Integer.toString(operationThreadCount));
-		config.setProperty("hazelcast.operation.generic.thread.count", Integer.toString(operationGenericThreadCount));
-		config.setProperty("hazelcast.event.thread.count", Integer.toString(eventThreadCount));
-		config.setProperty("hazelcast.client.event.thread.count", Integer.toString(clientEventThreadCount));
-		config.setProperty("hazelcast.partition.count", Integer.toString(partitionSize));
-		config.setProperty("hazelcast.max.no.heartbeat.seconds", Integer.toString(maxNoHeartbeatSeconds));
-		config.setProperty("hazelcast.max.no.heartbeat.seconds", "128");
-		config.setProperty("hazelcast.max.no.heartbeat.seconds", "128");
 
 		ExecutorConfig executorConfig = new ExecutorConfig().setStatisticsEnabled( false );
 		if(executorPoolSize == 0) {

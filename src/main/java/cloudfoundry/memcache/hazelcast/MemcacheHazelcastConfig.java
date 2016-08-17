@@ -163,6 +163,10 @@ public class MemcacheHazelcastConfig {
 		@NotNull Integer eventThreadCount;
 		@NotNull Integer clientEventThreadCount;
 		@NotNull Integer maxNoHeartbeatSeconds;
+		@NotNull Integer operationCallTimeout;
+		@NotNull Integer receiveBufferSize;
+		@NotNull Integer sendBufferSize;
+
 		@NotEmpty Map<String, List<String>> machines;
 		public Integer getPort() {
 			return port;
@@ -247,6 +251,24 @@ public class MemcacheHazelcastConfig {
 		}
 		public void setMaxNoHeartbeatSeconds(Integer maxNoHeartbeatSeconds) {
 			this.maxNoHeartbeatSeconds = maxNoHeartbeatSeconds;
+		}
+		public Integer getOperationCallTimeout() {
+			return operationCallTimeout;
+		}
+		public void setOperationCallTimeout(Integer operationCallTimeout) {
+			this.operationCallTimeout = operationCallTimeout;
+		}
+		public Integer getReceiveBufferSize() {
+			return receiveBufferSize;
+		}
+		public void setReceiveBufferSize(Integer receiveBufferSize) {
+			this.receiveBufferSize = receiveBufferSize;
+		}
+		public Integer getSendBufferSize() {
+			return sendBufferSize;
+		}
+		public void setSendBufferSize(Integer sendBufferSize) {
+			this.sendBufferSize = sendBufferSize;
 		}
 		public Map<String, List<String>> getMachines() {
 			return machines;
