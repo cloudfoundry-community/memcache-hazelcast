@@ -40,7 +40,7 @@ public class HazelcastMemcacheXMemcachedTest {
 		}
 
 		System.out.println("Localport: "+localPort);
-		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory());
+		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory(), 100);
 		server.start();
 
 		String[] servers =

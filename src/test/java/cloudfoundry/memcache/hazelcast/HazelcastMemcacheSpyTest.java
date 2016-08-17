@@ -11,6 +11,8 @@ import net.spy.memcached.ConnectionFactoryBuilder.Protocol;
 import net.spy.memcached.MemcachedClient;
 import net.spy.memcached.auth.AuthDescriptor;
 import net.spy.memcached.auth.PlainCallbackHandler;
+import net.spy.memcached.internal.OperationCompletionListener;
+import net.spy.memcached.internal.OperationFuture;
 import net.spy.memcached.transcoders.SerializingTranscoder;
 
 import org.testng.Assert;
@@ -42,7 +44,7 @@ public class HazelcastMemcacheSpyTest {
 		}
 
 		System.out.println("Localport: "+localPort);
-		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory());
+		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory(), 100);
 		server.start();
 
 		ConnectionFactoryBuilder binaryConnectionFactory = new ConnectionFactoryBuilder();
@@ -69,7 +71,62 @@ public class HazelcastMemcacheSpyTest {
 	public void getBasic() throws Exception {
 		c.delete("nothingHereGet").get();
 		Assert.assertNull(c.get("nothingHereGet"));
-		c.set("nothingHereGet", 0, "Some Data!").get();
+		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
+			
+			@Override
+			public void onComplete(OperationFuture<?> future) throws Exception {
+				System.out.println("Status was: "+future.getStatus());
+				
+			}
+		});
+		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
+			
+			@Override
+			public void onComplete(OperationFuture<?> future) throws Exception {
+				System.out.println("Status was: "+future.getStatus());
+				
+			}
+		});
+		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
+			
+			@Override
+			public void onComplete(OperationFuture<?> future) throws Exception {
+				System.out.println("Status was: "+future.getStatus());
+				
+			}
+		});
+		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
+			
+			@Override
+			public void onComplete(OperationFuture<?> future) throws Exception {
+				System.out.println("Status was: "+future.getStatus());
+				
+			}
+		});
+		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
+			
+			@Override
+			public void onComplete(OperationFuture<?> future) throws Exception {
+				System.out.println("Status was: "+future.getStatus());
+				
+			}
+		});
+		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
+			
+			@Override
+			public void onComplete(OperationFuture<?> future) throws Exception {
+				System.out.println("Status was: "+future.getStatus());
+				
+			}
+		});
+		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
+			
+			@Override
+			public void onComplete(OperationFuture<?> future) throws Exception {
+				System.out.println("Status was: "+future.getStatus());
+				
+			}
+		});
 		Assert.assertEquals(c.get("nothingHereGet"), "Some Data!");
 	}
 

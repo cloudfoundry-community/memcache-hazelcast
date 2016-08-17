@@ -25,11 +25,13 @@ public class MemcacheServer {
 	private volatile boolean running = false;
 	private final int port;
 	private final AuthMsgHandlerFactory authMsgHandlerFactory;
+	private int queueSize;
 
-	public MemcacheServer(MemcacheMsgHandlerFactory msgHandlerFactory, int port, AuthMsgHandlerFactory authMsgHandlerFactory) {
+	public MemcacheServer(MemcacheMsgHandlerFactory msgHandlerFactory, int port, AuthMsgHandlerFactory authMsgHandlerFactory, int queueSize) {
 		this.msgHandlerFactory = msgHandlerFactory;
 		this.port = port;
 		this.authMsgHandlerFactory = authMsgHandlerFactory;
+		this.queueSize = queueSize;
 	}
 
 	@PostConstruct
@@ -46,7 +48,7 @@ public class MemcacheServer {
 					protected void initChannel(SocketChannel ch) throws Exception {
 						ch.pipeline().addFirst("memcache", new BinaryMemcacheServerCodec());
 						ch.pipeline().addLast("memcache-handler", new MemcacheInboundHandlerAdapter(msgHandlerFactory, authMsgHandlerFactory.createAuthMsgHandler()));
-						ch.pipeline().addBefore("memcache-handler", "memcache-order", new MemcacheOrderingDuplexHandler());
+						ch.pipeline().addBefore("memcache-handler", "memcache-order", new MemcacheOrderingDuplexHandler(queueSize));
 					}
 				})
 				.childOption(ChannelOption.TCP_NODELAY, true)

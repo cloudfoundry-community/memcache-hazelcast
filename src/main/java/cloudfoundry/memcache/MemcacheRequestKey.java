@@ -1,6 +1,7 @@
 package cloudfoundry.memcache;
 
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheMessage;
 
 public class MemcacheRequestKey {
@@ -10,7 +11,7 @@ public class MemcacheRequestKey {
 	public MemcacheRequestKey(BinaryMemcacheMessage message) {
 		this.opcode = message.opcode();
 		this.opaque = message.opaque();
-		this.key = message.key();
+		this.key = key == null ? null : Unpooled.copiedBuffer(message.key());
 	}
 	
 	public byte getOpcode() {

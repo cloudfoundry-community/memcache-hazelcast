@@ -1,10 +1,16 @@
 package cloudfoundry.memcache;
 
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.memcache.binary.BinaryMemcacheMessage;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 
 import java.io.UnsupportedEncodingException;
 
@@ -31,7 +37,7 @@ public class MemcacheUtils {
 			response.setOpaque(opaque);
 			response.setOpcode(opcode);
 			response.setTotalBodyLength(message.length());
-			ctx.writeAndFlush(response.retain());
+			MemcacheUtils.writeAndFlush(ctx, response);
 			return false;
 		};
 	}
@@ -50,16 +56,21 @@ public class MemcacheUtils {
 			response.setOpaque(opaque);
 			response.setTotalBodyLength(realMessage.length());
 			response.setCas(cas);
-			ctx.writeAndFlush(response.retain());
+			MemcacheUtils.writeAndFlush(ctx, response);
 			return false;
 		};
 	}
 
 	public static ResponseSender returnQuiet(byte opcode, int opaque) {
 		return (ctx) -> {
-			ctx.writeAndFlush(new QuietResponse(opcode, opaque));
+			MemcacheUtils.writeAndFlush(ctx, new QuietResponse(opcode, opaque));
 			return false;
 		};
+	}
+	
+	public static void writeAndFlush(ChannelHandlerContext ctx, BinaryMemcacheMessage msg) {
+		ChannelFuture future = ctx.writeAndFlush(msg.retain());
+		future.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
 

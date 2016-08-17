@@ -126,7 +126,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				} else {
 					response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
 				}
-				ctx.writeAndFlush(response.retain());
+				MemcacheUtils.writeAndFlush(ctx, response);
 				if (LOGGER.isDebugEnabled()) {
 					LOGGER.debug("Current Socket: " + ctx.channel().id() + " Flushed response for key: " + key);
 				}
@@ -307,7 +307,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					response.setCas(msg.getValue().getCAS());
 					response.setOpaque(opaque);
 					response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
-					ctx.writeAndFlush(response.retain());
+					MemcacheUtils.writeAndFlush(ctx, response);
 				} else {
 					MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
 				}
@@ -547,7 +547,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		response.setOpcode(opcode);
 		response.setOpaque(opaque);
 		response.setTotalBodyLength(key.length + value.length());
-		ctx.writeAndFlush(response.retain());
+		MemcacheUtils.writeAndFlush(ctx, response);
 	}
 
 	@Override
@@ -622,7 +622,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 						} else {
 							response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity());
 						}
-						ctx.writeAndFlush(response.retain());
+						MemcacheUtils.writeAndFlush(ctx, response);
 					}
 
 					public void onFailure(Throwable t) {

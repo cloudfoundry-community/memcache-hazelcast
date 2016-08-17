@@ -86,10 +86,10 @@ public class Main {
 
 	@Bean
 	AuthMsgHandlerFactory authHandlerFactory(MemcacheHazelcastConfig config) {
-		if(config.getMemcache().getSecret_key() == null || config.getMemcache().getSecret_key().isEmpty()) {
+		if(config.getMemcache().getSecretKey() == null || config.getMemcache().getSecretKey().isEmpty()) {
 			return new StubAuthMsgHandlerFactory();
 		}
-		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecret_key());
+		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey());
 	}
 	
 	@Bean
@@ -99,7 +99,7 @@ public class Main {
 
 	@Bean
 	MemcacheServer memcacheServer(MemcacheMsgHandlerFactory handlerFactory, AuthMsgHandlerFactory authFactory, MemcacheHazelcastConfig config) {
-		MemcacheServer server = new MemcacheServer(handlerFactory, config.getMemcache().getPort(), authFactory);
+		MemcacheServer server = new MemcacheServer(handlerFactory, config.getMemcache().getPort(), authFactory, config.getMemcache().getMaxQueueSize());
 		return server;
 	}
 

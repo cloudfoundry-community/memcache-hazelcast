@@ -44,7 +44,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 		response.setOpcode(request.opcode());
 		response.setOpaque(request.opaque());
 		response.setTotalBodyLength(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.length());
-		ctx.writeAndFlush(response.retain());
+		MemcacheUtils.writeAndFlush(ctx, response);
 		return false;
 	}
 
@@ -73,7 +73,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 			response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
 			response.setOpaque(opaque);
-			ctx.writeAndFlush(response);
+			MemcacheUtils.writeAndFlush(ctx, response);
 		} else {
 			authenticated = false;
 			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);

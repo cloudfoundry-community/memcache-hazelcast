@@ -14,7 +14,7 @@ import org.testng.annotations.Test;
 public class MemcacheOrderingDuplexHandlerTest {
 	@Test
 	public void testRead() throws Exception {
-		MemcacheOrderingDuplexHandler handler = new MemcacheOrderingDuplexHandler();
+		MemcacheOrderingDuplexHandler handler = new MemcacheOrderingDuplexHandler(100);
 		BinaryMemcacheRequest request1 = new DefaultBinaryMemcacheRequest();
 		request1.setOpcode(BinaryMemcacheOpcodes.GET);
 		request1.setOpaque(1);
