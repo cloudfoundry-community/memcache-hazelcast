@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 
 import com.hazelcast.config.Config;
+import com.hazelcast.config.EvictionPolicy;
 import com.hazelcast.config.JoinConfig;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.MaxSizeConfig;
@@ -44,7 +45,11 @@ public class Main {
 			mapConfig.setStatisticsEnabled(true);
 			mapConfig.setBackupCount(plan.getValue().getBackup());
 			mapConfig.setAsyncBackupCount(plan.getValue().getAsyncBackup());
-			mapConfig.setEvictionPolicy(plan.getValue().getEvictionPolicy());
+			if(plan.getValue().getEvictionPolicy() == EvictionPolicy.LRU) {
+				mapConfig.setMapEvictionPolicy(LRUCreatedOrUpdateEvictionPolicy.INSTANCE);
+			} else {
+				mapConfig.setEvictionPolicy(plan.getValue().getEvictionPolicy());
+			}
 			mapConfig.setMaxIdleSeconds(plan.getValue().getMaxIdleSeconds());
 			mapConfig.setMaxSizeConfig(
 					new MaxSizeConfig(plan.getValue().getMaxSizeUsedHeap(), MaxSizePolicy.USED_HEAP_SIZE));
