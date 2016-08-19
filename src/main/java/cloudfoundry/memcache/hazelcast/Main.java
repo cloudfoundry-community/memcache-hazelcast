@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EvictionPolicy;
@@ -32,6 +33,7 @@ import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 import cloudfoundry.memcache.web.HttpBasicAuthenticator;
 
 @SpringBootApplication
+@ComponentScan("cloudfoundry.memcache")
 public class Main {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
