@@ -131,7 +131,7 @@ public class MemcacheOrderingDuplexHandler extends ChannelDuplexHandler {
 					LOGGER.warn("Unexpected Error clearing delayedMsgQueue: " + e.getMessage());
 				}
 				try {
-					delayedMessage.promise.setFailure(new RuntimeException("Orphaned Write"));
+					delayedMessage.promise.cancel(false);
 				} catch (Exception e) {
 					LOGGER.warn("Unexpected Error failing promise: " + e.getMessage());
 				}
