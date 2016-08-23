@@ -77,9 +77,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 			MemcacheUtils.writeAndFlush(ctx, response);
 		} else {
 			authenticated = false;
-			Future<?> task = MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
-			ctx.channel().close();
-			return task;
+			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
 		}
 		return CompletedFuture.INSTANCE;
 	}
