@@ -13,6 +13,7 @@ import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
+import java.util.concurrent.Future;
 
 public class StubAuthMsgHandler implements AuthMsgHandler {
 	
@@ -27,7 +28,7 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 	}
 
 	@Override
-	public boolean listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		FullBinaryMemcacheResponse response;
 		try {
@@ -40,18 +41,18 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 		response.setOpaque(request.opaque());
 		response.setTotalBodyLength(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.length());
 		MemcacheUtils.writeAndFlush(ctx, response);
-		return false;
+		return CompletedFuture.INSTANCE;
 	}
 
 	@Override
-	public boolean startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		opaque = request.opaque();
-		return true;
+		return null;
 	}
 
 	@Override
-	public boolean startAuth(ChannelHandlerContext ctx, MemcacheContent content) {
+	public Future<?> startAuth(ChannelHandlerContext ctx, MemcacheContent content) {
 		byte[] arrayContent = new byte[content.content().capacity()];
 		content.content().readBytes(arrayContent);
 		username = MemcacheUtils.extractSaslUsername(arrayContent);
@@ -60,7 +61,7 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 		response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
 		response.setOpaque(opaque);
 		MemcacheUtils.writeAndFlush(ctx, response);
-		return false;
+		return CompletedFuture.INSTANCE;
 	}
 	
 	public boolean isAuthenticated() {

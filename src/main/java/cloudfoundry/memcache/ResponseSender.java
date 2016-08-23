@@ -1,7 +1,9 @@
 package cloudfoundry.memcache;
 
+import java.util.concurrent.Future;
+
 import io.netty.channel.ChannelHandlerContext;
 
 public interface ResponseSender {
-	boolean send(ChannelHandlerContext ctx);
+	Future<?> send(ChannelHandlerContext ctx);
 }

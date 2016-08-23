@@ -1,5 +1,7 @@
 package cloudfoundry.memcache;
 
+import java.util.concurrent.Future;
+
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
@@ -7,26 +9,26 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 public interface MemcacheMsgHandler {
 	public byte getOpcode();
 	public int getOpaque();
-	public boolean get(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean getK(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean set(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean set(ChannelHandlerContext ctx, MemcacheContent content);
-	public boolean add(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean add(ChannelHandlerContext ctx, MemcacheContent content);
-	public boolean replace(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean replace(ChannelHandlerContext ctx, MemcacheContent content);
-	public boolean delete(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean increment(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean decrement(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean quit(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean flush(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean noop(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean version(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean append(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean append(ChannelHandlerContext ctx, MemcacheContent content);
-	public boolean prepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean prepend(ChannelHandlerContext ctx, MemcacheContent content);
-	public boolean stat(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean touch(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
-	public boolean gat(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> get(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> getK(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> set(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> set(ChannelHandlerContext ctx, MemcacheContent content);
+	public Future<?> add(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> add(ChannelHandlerContext ctx, MemcacheContent content);
+	public Future<?> replace(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> replace(ChannelHandlerContext ctx, MemcacheContent content);
+	public Future<?> delete(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> increment(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> decrement(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> quit(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> flush(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> noop(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> version(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> append(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> append(ChannelHandlerContext ctx, MemcacheContent content);
+	public Future<?> prepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> prepend(ChannelHandlerContext ctx, MemcacheContent content);
+	public Future<?> stat(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> touch(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
+	public Future<?> gat(ChannelHandlerContext ctx, BinaryMemcacheRequest request);
 }

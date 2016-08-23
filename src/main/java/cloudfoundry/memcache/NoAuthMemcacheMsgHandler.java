@@ -1,5 +1,7 @@
 package cloudfoundry.memcache;
 
+import java.util.concurrent.Future;
+
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
@@ -26,112 +28,112 @@ public class NoAuthMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 	
 	@Override
-	public boolean get(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> get(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean getK(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> getK(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean set(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> set(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean set(ChannelHandlerContext ctx, MemcacheContent content) {
-		return false;
+	public Future<?> set(ChannelHandlerContext ctx, MemcacheContent content) {
+		return CompletedFuture.INSTANCE;
 	}
 
 	@Override
-	public boolean add(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> add(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean add(ChannelHandlerContext ctx, MemcacheContent content) {
-		return false;
+	public Future<?> add(ChannelHandlerContext ctx, MemcacheContent content) {
+		return CompletedFuture.INSTANCE;
 	}
 
 	@Override
-	public boolean replace(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> replace(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean replace(ChannelHandlerContext ctx, MemcacheContent content) {
-		return false;
+	public Future<?> replace(ChannelHandlerContext ctx, MemcacheContent content) {
+		return CompletedFuture.INSTANCE;
 	}
 
 	@Override
-	public boolean delete(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> delete(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean increment(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> increment(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean decrement(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> decrement(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean quit(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> quit(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean flush(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> flush(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean noop(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> noop(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean version(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> version(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean append(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> append(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean append(ChannelHandlerContext ctx, MemcacheContent content) {
-		return false;
+	public Future<?> append(ChannelHandlerContext ctx, MemcacheContent content) {
+		return CompletedFuture.INSTANCE;
 	}
 
 	@Override
-	public boolean prepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> prepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean prepend(ChannelHandlerContext ctx, MemcacheContent content) {
-		return false;
+	public Future<?> prepend(ChannelHandlerContext ctx, MemcacheContent content) {
+		return CompletedFuture.INSTANCE;
 	}
 
 	@Override
-	public boolean stat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> stat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean touch(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> touch(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 
 	@Override
-	public boolean gat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> gat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "Connection must be authenticated to use this command.").send(ctx);
 	}
 }

@@ -13,6 +13,7 @@ import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
+import java.util.concurrent.Future;
 
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.digest.DigestUtils;
@@ -32,7 +33,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	}
 
 	@Override
-	public boolean listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		FullBinaryMemcacheResponse response;
 		try {
@@ -45,21 +46,21 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 		response.setOpaque(request.opaque());
 		response.setTotalBodyLength(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.length());
 		MemcacheUtils.writeAndFlush(ctx, response);
-		return false;
+		return CompletedFuture.INSTANCE;
 	}
 
 	@Override
-	public boolean startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public Future<?> startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		if (!SUPPORTED_SASL_MECHS.contains(new String(Unpooled.copiedBuffer(request.key()).array()))) {
 			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Authentication Mechanism: "+new String(Unpooled.copiedBuffer(request.key()).array())).send(ctx);
 		}
 		opaque = request.opaque();
-		return true;
+		return null;
 	}
 
 	@Override
-	public boolean startAuth(ChannelHandlerContext ctx, MemcacheContent content) {
+	public Future<?> startAuth(ChannelHandlerContext ctx, MemcacheContent content) {
 		byte[] arrayContent = new byte[content.content().capacity()];
 		content.content().readBytes(arrayContent);
 		username = MemcacheUtils.extractSaslUsername(arrayContent);
@@ -78,7 +79,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 			authenticated = false;
 			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
 		}
-		return false;
+		return CompletedFuture.INSTANCE;
 	}
 
 	private boolean validatePassword(String username, String password) {

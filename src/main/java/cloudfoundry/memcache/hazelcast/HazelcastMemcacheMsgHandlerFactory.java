@@ -70,7 +70,6 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	}
 
 	private void setupSerializables(Config config) {
-		config.getSerializationConfig().addDataSerializableFactory(1, (int id) -> (id == 1) ? new HazelcastGetCallable() : null);
 		config.getSerializationConfig().addDataSerializableFactory(2, (int id) -> (id == 2) ? new HazelcastSetCallable() : null);
 		config.getSerializationConfig().addDataSerializableFactory(3, (int id) -> (id == 3) ? new HazelcastMemcacheMessage() : null);
 		config.getSerializationConfig().addDataSerializableFactory(4, (int id) -> (id == 4) ? new HazelcastDeleteCallable() : null);

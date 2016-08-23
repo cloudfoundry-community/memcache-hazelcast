@@ -38,7 +38,7 @@ public class MemcacheUtils {
 			response.setOpcode(opcode);
 			response.setTotalBodyLength(message.length());
 			MemcacheUtils.writeAndFlush(ctx, response);
-			return false;
+			return CompletedFuture.INSTANCE;
 		};
 	}
 	
@@ -57,19 +57,19 @@ public class MemcacheUtils {
 			response.setTotalBodyLength(realMessage.length());
 			response.setCas(cas);
 			MemcacheUtils.writeAndFlush(ctx, response);
-			return false;
+			return CompletedFuture.INSTANCE;
 		};
 	}
 
 	public static ResponseSender returnQuiet(byte opcode, int opaque) {
 		return (ctx) -> {
 			MemcacheUtils.writeAndFlush(ctx, new QuietResponse(opcode, opaque));
-			return false;
+			return CompletedFuture.INSTANCE;
 		};
 	}
 	
 	public static void writeAndFlush(ChannelHandlerContext ctx, BinaryMemcacheMessage msg) {
-		ChannelFuture future = ctx.writeAndFlush(msg.retain());
+		ChannelFuture future = ctx.channel().writeAndFlush(msg.retain());
 		future.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
