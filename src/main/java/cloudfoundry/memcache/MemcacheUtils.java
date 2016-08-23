@@ -96,7 +96,7 @@ public class MemcacheUtils {
 	public static String extractSaslUsername(byte[] auth) {
 		StringBuilder builder = new StringBuilder();
 		int i = 1;
-		for (; auth[i] != 0 && i <= auth.length; i++) {
+		for (; auth[i] != 0 && i < auth.length; i++) {
 			builder.append((char) auth[i]);
 		}
 		if(i == auth.length) {

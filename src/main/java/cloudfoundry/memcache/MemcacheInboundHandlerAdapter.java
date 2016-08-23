@@ -320,11 +320,8 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(optcode)).send(ctx);
 			}
 		} catch(Throwable e) {
-			LOGGER.error("Error while invoking MemcacheMsgHandler", e);
-			if(currentMsgHandler != null) {
-				MemcacheUtils.returnFailure(currentMsgHandler.getOpcode(), currentMsgHandler.getOpaque(), (short)0x0084, e.getMessage()).send(ctx);
-				completeRequest(null);
-			}
+			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.", e);
+			ctx.channel().close();
 		} finally {
 			ReferenceCountUtil.release(msg);
 		}
