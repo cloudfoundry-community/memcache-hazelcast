@@ -71,7 +71,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			if (msg instanceof BinaryMemcacheRequest) {
 				//Apply back presure
 				if(msgOrderQueue.size() > maxQueueSize) {
-					LOGGER.info("Applying some back presure to client"+ctx.channel().remoteAddress().toString()+" because queuesize is: "+msgOrderQueue.size());
+					LOGGER.info("Applying some back presure to client "+getAuthMsgHandler().getUsername()+" because queuesize is: "+msgOrderQueue.size());
 					try {
 						for(DelayedMessage delayedMessage : msgOrderQueue) {
 							try {

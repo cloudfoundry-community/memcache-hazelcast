@@ -13,6 +13,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 
 import java.io.UnsupportedEncodingException;
+import java.util.Arrays;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,8 +95,12 @@ public class MemcacheUtils {
 
 	public static String extractSaslUsername(byte[] auth) {
 		StringBuilder builder = new StringBuilder();
-		for (int i = 1; auth[i] != 0 && i <= auth.length; i++) {
+		int i = 1;
+		for (; auth[i] != 0 && i <= auth.length; i++) {
 			builder.append((char) auth[i]);
+		}
+		if(i == auth.length) {
+			LOGGER.warn("Failed to parse SASL username no 0 character found: "+Arrays.toString(auth));
 		}
 		return builder.toString();
 	}
