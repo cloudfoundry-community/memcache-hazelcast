@@ -69,8 +69,12 @@ public class MemcacheUtils {
 	}
 	
 	public static void writeAndFlush(ChannelHandlerContext ctx, BinaryMemcacheMessage msg) {
-		ChannelFuture future = ctx.channel().writeAndFlush(msg.retain());
-		future.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+		if(ctx.channel().isOpen() && ctx.channel().isActive()) {
+			ChannelFuture future = ctx.channel().writeAndFlush(msg.retain());
+			future.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+		} else {
+			LOGGER.warn("Failed to send message because channel was not open and active.");
+		}
 	}
 
 
@@ -90,7 +94,7 @@ public class MemcacheUtils {
 
 	public static String extractSaslUsername(byte[] auth) {
 		StringBuilder builder = new StringBuilder();
-		for (int i = 1; auth[i] != 0; i++) {
+		for (int i = 1; auth[i] != 0 && i <= auth.length; i++) {
 			builder.append((char) auth[i]);
 		}
 		return builder.toString();

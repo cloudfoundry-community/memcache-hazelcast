@@ -15,6 +15,7 @@ import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 
@@ -137,6 +138,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 			@Override
 			public void onFailure(Throwable t) {
+				if(t instanceof CancellationException) {
+					//Task Was cancelled.  Ignoring this exception.
+					return;
+				}
 				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
 			}
@@ -217,7 +222,11 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				}
 
 				public void onFailure(Throwable t) {
-					LOGGER.error("Error invoking "+opcode+" asyncronously", t);
+					if(t instanceof CancellationException) {
+						//Task Was cancelled.  Ignoring this exception.
+						return;
+					}
+					LOGGER.error("Error invoking opcode="+opcode+" asyncronously", t);
 					MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 				}
 			};
@@ -269,6 +278,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 
 			public void onFailure(Throwable t) {
+				if(t instanceof CancellationException) {
+					//Task Was cancelled.  Ignoring this exception.
+					return;
+				}
 				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 			}
@@ -327,6 +340,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 
 			public void onFailure(Throwable t) {
+				if(t instanceof CancellationException) {
+					//Task Was cancelled.  Ignoring this exception.
+					return;
+				}
 				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 			}
@@ -409,6 +426,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				}
 
 				public void onFailure(Throwable t) {
+					if(t instanceof CancellationException) {
+						//Task Was cancelled.  Ignoring this exception.
+						return;
+					}
 					LOGGER.error("Error invoking Opcode "+opcode+" asyncronously", t);
 					MemcacheUtils.returnFailure(opcode, opaque, (short) 0x0084, t.getMessage()).send(ctx);
 				}
@@ -586,6 +607,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 
 			public void onFailure(Throwable t) {
+				if(t instanceof CancellationException) {
+					//Task Was cancelled.  Ignoring this exception.
+					return;
+				}
 				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 			}
@@ -644,6 +669,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 
 			public void onFailure(Throwable t) {
+				if(t instanceof CancellationException) {
+					//Task Was cancelled.  Ignoring this exception.
+					return;
+				}
 				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
 			}
