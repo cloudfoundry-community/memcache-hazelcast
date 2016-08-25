@@ -112,7 +112,7 @@ public class Main {
 		config.setProperty("hazelcast.socket.send.buffer.size", Integer.toString(springConfig.getHazelcast().getSendBufferSize()));
 		config.setProperty("hazelcast.socket.connect.timeout.seconds", "30");
 		config.setProperty("hazelcast.slow.operation.detector.enabled", "false");
-		config.setProperty("hazelcast.performance.monitoring.enabled", "false");
+		config.setProperty("hazelcast.diagnostics.enabled", "false");
 		config.setProperty("hazelcast.partition.migration.timeout", Integer.toString(springConfig.getHazelcast().getMaxNoHeartbeatSeconds()));
 		config.setProperty("hazelcast.max.join.seconds", "30");
 		config.setProperty("hazelcast.max.no.master.confirmation.seconds", "60");
