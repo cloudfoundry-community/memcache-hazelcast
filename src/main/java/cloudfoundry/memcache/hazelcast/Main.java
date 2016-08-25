@@ -23,6 +23,9 @@ import com.hazelcast.config.NearCacheConfig.LocalUpdatePolicy;
 import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.config.PartitionGroupConfig;
 import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
+
+import cf.dropsonde.spring.boot.EnableMetronClient;
+
 import com.hazelcast.config.TcpIpConfig;
 
 import cloudfoundry.memcache.AuthMsgHandlerFactory;
@@ -34,6 +37,7 @@ import cloudfoundry.memcache.web.HttpBasicAuthenticator;
 
 @SpringBootApplication
 @ComponentScan("cloudfoundry.memcache")
+@EnableMetronClient
 public class Main {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);

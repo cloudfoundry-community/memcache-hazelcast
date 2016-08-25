@@ -2,7 +2,9 @@
 logging:
   level.cloudfoundry.memcache: INFO
 
+metron:
+  origin: Memcache
+
 spring:
   pid:
     fail-on-write-error: true
-     

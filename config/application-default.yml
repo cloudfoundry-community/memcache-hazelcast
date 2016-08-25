@@ -14,6 +14,7 @@ memcache:
   maxQueueSize: 1000
 
 hazelcast:
+  metricsPublishInterval: 120000
   port: 5701
   localMemberSafeTimeout: 120
   minimumClusterMembers: 1
@@ -45,7 +46,7 @@ plans:
     asyncBackup: 0
     evictionPolicy: LRU
     maxIdleSeconds: 86400
-    maxSizeUsedHeap: 1000
+    maxSizeUsedHeap: 10
   medium:
     backup: 0
     asyncBackup: 1
