@@ -93,20 +93,20 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 
 	@Override
 	public boolean isReady() {
-		if(instance.getLifecycleService().isRunning()) {
-			int clusterSize = instance.getCluster().getMembers().size();
-			if(clusterSize >= minimumClusterMembers) {
-				return true;
-			} else {
-				LOGGER.warn("Hazelcast is not ready because this node is only connected to "+clusterSize+" of the required "+minimumClusterMembers+" cluster members." );
-			}
+		int clusterSize = instance.getCluster().getMembers().size();
+		if(clusterSize >= minimumClusterMembers) {
+			return true;
 		} else {
-			LOGGER.error("Hazelcast is not ready because it is not currently running for some reason.  Shutting down now so that it restarts.");
-			System.exit(1);
+			LOGGER.warn("Hazelcast is not ready because this node is only connected to "+clusterSize+" of the required "+minimumClusterMembers+" cluster members." );
 		}
 		return false;
 	}
-	
+
+	@Override
+	public boolean isRunning() {
+		return instance.getLifecycleService().isRunning();
+	}
+
 	@PreDestroy
 	public void shutdown() {
 		LOGGER.info("Shutting down Hazelcast.");

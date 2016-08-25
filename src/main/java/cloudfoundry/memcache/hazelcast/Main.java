@@ -9,6 +9,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EvictionPolicy;
@@ -24,6 +25,7 @@ import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.config.PartitionGroupConfig;
 import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
 
+import cf.dropsonde.metron.MetronClient;
 import cf.dropsonde.spring.boot.EnableMetronClient;
 
 import com.hazelcast.config.TcpIpConfig;
@@ -38,6 +40,7 @@ import cloudfoundry.memcache.web.HttpBasicAuthenticator;
 @SpringBootApplication
 @ComponentScan("cloudfoundry.memcache")
 @EnableMetronClient
+@EnableScheduling
 public class Main {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);

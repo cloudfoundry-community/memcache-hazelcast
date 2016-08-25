@@ -3,7 +3,9 @@ package cloudfoundry.memcache.hazelcast;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
 
 import com.hazelcast.com.eclipsesource.json.JsonObject;
 import com.hazelcast.core.DistributedObject;
@@ -16,17 +18,19 @@ import com.hazelcast.monitor.NearCacheStats;
 
 import cf.dropsonde.metron.MetronClient;
 
+@Component
 public class MetricsPublisher {
 
-	private final HazelcastInstance instance;
+	private final HazelcastMemcacheMsgHandlerFactory hazelcastMsgFactory;
 	private final long maxSize;
 	private final MetronClient metronClient;
 	private volatile Map<String, Long> previousOperationsCounts;
 
-	public MetricsPublisher(HazelcastInstance instance, MetronClient metronClient, long maxSize) {
+	@Autowired
+	public MetricsPublisher(HazelcastMemcacheMsgHandlerFactory hazelcastMsgFactory, MetronClient metronClient, MemcacheHazelcastConfig config) {
 		super();
-		this.instance = instance;
-		this.maxSize = maxSize;
+		this.hazelcastMsgFactory = hazelcastMsgFactory;
+		this.maxSize = config.getHazelcast().getMaxCacheSize();
 		this.metronClient = metronClient;
 		previousOperationsCounts = new HashMap<>();
 	}
@@ -70,6 +74,7 @@ public class MetricsPublisher {
 	}
 	
 	private AggregateStats buildAggregateStats() {
+		HazelcastInstance instance = hazelcastMsgFactory.getInstance();
 		AggregateStats stats = new AggregateStats(previousOperationsCounts);
 		for (DistributedObject object : instance.getDistributedObjects()) {
 			if (object instanceof IMap) {
