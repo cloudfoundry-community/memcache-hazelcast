@@ -19,6 +19,7 @@ import cloudfoundry.memcache.MemcacheMsgHandler;
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
 
+import com.hazelcast.cluster.ClusterState;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EvictionPolicy;
 import com.hazelcast.config.ExecutorConfig;
@@ -265,6 +266,29 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 			LOGGER.info("Destroying cache: "+name);
 			map.destroy();
 		}
+	}
+	
+	@Override
+	public String status() {
+		if(shuttingDown)  {
+			return "Shutdown";
+		}
+		if(instance == null) {
+			return "InstanceNull";
+		}
+		if(!instance.getLifecycleService().isRunning()) {
+			return "NotRunning";
+		}
+		if(instance.getCluster().getClusterState() != ClusterState.ACTIVE) {
+			return "ClusterNotActive";
+		}
+		if(!instance.getPartitionService().isClusterSafe()) {
+			return "ClusterNotSafe";
+		}
+		if(!instance.getPartitionService().isLocalMemberSafe()) {
+			return "LocalMemberNotSafe";
+		}
+		return "OK";
 	}
 
 	@PreDestroy
