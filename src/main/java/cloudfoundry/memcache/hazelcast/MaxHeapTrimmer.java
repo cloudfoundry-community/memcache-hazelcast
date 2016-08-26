@@ -14,18 +14,22 @@ import com.hazelcast.core.IMap;
 public class MaxHeapTrimmer implements Runnable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MaxHeapTrimmer.class);
 
-	private final HazelcastInstance instance;
+	private final HazelcastMemcacheMsgHandlerFactory factory;
 	private final long totalHeap;
 	private final int percentToTrim;
 	
-	public MaxHeapTrimmer(HazelcastInstance instance, long totalHeap, int percentToTrim) {
+	public MaxHeapTrimmer(HazelcastMemcacheMsgHandlerFactory factory, long totalHeap, int percentToTrim) {
 		super();
-		this.instance = instance;
+		this.factory = factory;
 		this.totalHeap = totalHeap;
 		this.percentToTrim = percentToTrim;
 	}
 
 	public void run() {
+		HazelcastInstance instance = factory.getInstance();
+		if(!instance.getLifecycleService().isRunning()) {
+			return;
+		}
 		LOGGER.debug("Running MaxHeapTrimmer.");
 		try {
 			long totalUsed;
@@ -51,7 +55,7 @@ public class MaxHeapTrimmer implements Runnable {
 
 	@SuppressWarnings("unchecked")
 	private void trimCacheSize() {
-		for(DistributedObject object : instance.getDistributedObjects()) {
+		for(DistributedObject object : factory.getInstance().getDistributedObjects()) {
 			if(object instanceof IMap) {
 				IMap<Object, ?> map = (IMap<Object, ?>)object;
 				long ownedEntryCost = map.getLocalMapStats().getOwnedEntryMemoryCost();

@@ -50,15 +50,6 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 	@Override
 	public void channelActive(ChannelHandlerContext ctx) throws Exception {
-		if(!msgHandlerFactory.isRunning()) {
-			LOGGER.error("For some unknown reason hazelcast isn't running.  Exiting the process.");
-			ctx.channel().close();
-			System.exit(1);
-		}
-		if(!msgHandlerFactory.isReady()) {
-			LOGGER.error("Closing connection because hazelcast is not currently ready to recieve connections.");
-			ctx.channel().close();
-		}
 		ctx.channel().closeFuture().addListener(new GenericFutureListener<io.netty.util.concurrent.Future<Void>>() {
 			@Override
 			public void operationComplete(io.netty.util.concurrent.Future<Void> future) throws Exception {

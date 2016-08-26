@@ -2,6 +2,7 @@ package cloudfoundry.memcache.hazelcast;
 
 import java.net.ServerSocket;
 import java.net.SocketAddress;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Random;
 
@@ -30,26 +31,27 @@ import com.hazelcast.config.Config;
 public class HazelcastMemcacheSpyTest {
 
 	MemcachedClient c;
-	MemcacheServer server;
+	MemcacheMsgHandlerFactory factory;
 
 	@BeforeClass
 	public void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
-		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config(), 1, 1, 16, 536870912, 20, 10000);
-		
-		
 		int localPort = 54913;
 		try (ServerSocket s = new ServerSocket(0)) {
 			localPort = s.getLocalPort();
 		}
 
 		System.out.println("Localport: "+localPort);
-		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory(), 100);
-		server.start();
+		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 100);
+
+		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
+		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
+		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
+
 
 		ConnectionFactoryBuilder binaryConnectionFactory = new ConnectionFactoryBuilder();
 		binaryConnectionFactory.setProtocol(Protocol.BINARY);
-		binaryConnectionFactory.setAuthDescriptor(new AuthDescriptor(null, new PlainCallbackHandler("someUser", "somePassword")));
+		binaryConnectionFactory.setAuthDescriptor(new AuthDescriptor(null, new PlainCallbackHandler("small|blah|blah", "somePassword")));
 		binaryConnectionFactory.setShouldOptimize(false);
 		binaryConnectionFactory.setAuthWaitTime(10000000);
 		binaryConnectionFactory.setOpTimeout(10000000);
@@ -64,69 +66,14 @@ public class HazelcastMemcacheSpyTest {
 	@AfterClass
 	public void after() throws Exception {
 		c.shutdown();
-		server.shutdown();
+		factory.shutdown();
 	}
 
 	@Test
 	public void getBasic() throws Exception {
 		c.delete("nothingHereGet").get();
 		Assert.assertNull(c.get("nothingHereGet"));
-		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
-			
-			@Override
-			public void onComplete(OperationFuture<?> future) throws Exception {
-				System.out.println("Status was: "+future.getStatus());
-				
-			}
-		});
-		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
-			
-			@Override
-			public void onComplete(OperationFuture<?> future) throws Exception {
-				System.out.println("Status was: "+future.getStatus());
-				
-			}
-		});
-		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
-			
-			@Override
-			public void onComplete(OperationFuture<?> future) throws Exception {
-				System.out.println("Status was: "+future.getStatus());
-				
-			}
-		});
-		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
-			
-			@Override
-			public void onComplete(OperationFuture<?> future) throws Exception {
-				System.out.println("Status was: "+future.getStatus());
-				
-			}
-		});
-		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
-			
-			@Override
-			public void onComplete(OperationFuture<?> future) throws Exception {
-				System.out.println("Status was: "+future.getStatus());
-				
-			}
-		});
-		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
-			
-			@Override
-			public void onComplete(OperationFuture<?> future) throws Exception {
-				System.out.println("Status was: "+future.getStatus());
-				
-			}
-		});
-		c.set("nothingHereGet", 0, "Some Data!").addListener(new OperationCompletionListener() {
-			
-			@Override
-			public void onComplete(OperationFuture<?> future) throws Exception {
-				System.out.println("Status was: "+future.getStatus());
-				
-			}
-		});
+		c.set("nothingHereGet", 0, "Some Data!").get();
 		Assert.assertEquals(c.get("nothingHereGet"), "Some Data!");
 	}
 

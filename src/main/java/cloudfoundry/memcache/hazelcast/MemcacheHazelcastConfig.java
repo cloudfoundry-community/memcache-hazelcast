@@ -1,6 +1,7 @@
 package cloudfoundry.memcache.hazelcast;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -17,10 +18,10 @@ import com.hazelcast.config.EvictionPolicy;
 @ConfigurationProperties
 public class MemcacheHazelcastConfig {
 
-	@NotNull @Valid Memcache memcache;
-	@NotNull @Valid Hazelcast hazelcast;
-	@NotNull @Valid Host host;
-	@NotEmpty @Valid Map<String, Plan> plans;
+	@NotNull @Valid Memcache memcache = new Memcache();
+	@NotNull @Valid Hazelcast hazelcast = new Hazelcast();
+	@NotNull @Valid Host host = new Host();
+	@NotEmpty @Valid Map<String, Plan> plans = new HashMap<>();
 	
 	public Memcache getMemcache() {
 		return memcache;
@@ -153,6 +154,7 @@ public class MemcacheHazelcastConfig {
 		@NotNull Integer localMemberSafeTimeout;
 		@NotNull Integer minimumClusterMembers;
 		@NotNull Integer executorPoolSize;
+		@NotNull Boolean enableMemoryTrimmer = Boolean.FALSE;
 		@NotNull Long maxCacheSize;
 		@NotNull Integer percentToTrim;
 		@NotNull Integer trimDelay;
@@ -166,8 +168,8 @@ public class MemcacheHazelcastConfig {
 		@NotNull Integer operationCallTimeout;
 		@NotNull Integer receiveBufferSize;
 		@NotNull Integer sendBufferSize;
+		@NotEmpty Map<String, List<String>> machines = new HashMap<>();
 
-		@NotEmpty Map<String, List<String>> machines;
 		public Integer getPort() {
 			return port;
 		}
@@ -191,6 +193,12 @@ public class MemcacheHazelcastConfig {
 		}
 		public void setExecutorPoolSize(Integer executorPoolSize) {
 			this.executorPoolSize = executorPoolSize;
+		}
+		public Boolean getEnableMemoryTrimmer() {
+			return enableMemoryTrimmer;
+		}
+		public void setEnableMemoryTrimmer(Boolean enableMemoryTrimmer) {
+			this.enableMemoryTrimmer = enableMemoryTrimmer;
 		}
 		public Long getMaxCacheSize() {
 			return maxCacheSize;

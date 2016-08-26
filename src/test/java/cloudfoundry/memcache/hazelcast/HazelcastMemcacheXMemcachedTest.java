@@ -2,6 +2,7 @@ package cloudfoundry.memcache.hazelcast;
 
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,22 +27,24 @@ import com.hazelcast.config.Config;
 public class HazelcastMemcacheXMemcachedTest {
 
 	MemcachedClient c;
-	MemcacheServer server;
+	MemcacheMsgHandlerFactory factory;
 
 	@BeforeClass
 	public void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
-		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config(), 1, 1, 16, 536870912, 20, 10000);
-		
-		
+
 		int localPort = 54913;
 		try (ServerSocket s = new ServerSocket(0)) {
 			localPort = s.getLocalPort();
 		}
 
 		System.out.println("Localport: "+localPort);
-		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory(), 100);
-		server.start();
+		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 100);
+
+		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
+		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
+		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
+
 
 		String[] servers =
 			{
@@ -64,7 +67,7 @@ public class HazelcastMemcacheXMemcachedTest {
 	@AfterClass
 	public void after() throws Exception {
 		c.shutdown();
-		server.shutdown();
+		factory.shutdown();
 	}
 
 	@Test

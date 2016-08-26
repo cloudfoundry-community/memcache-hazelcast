@@ -1,6 +1,7 @@
 package cloudfoundry.memcache.hazelcast;
 
 import java.net.ServerSocket;
+import java.util.Collections;
 
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
@@ -20,23 +21,23 @@ import com.whalin.MemCached.MemCachedClient;
 public class HazelcastMemcacheWhalinTest {
 
 	MemCachedClient c;
-	MemcacheServer server;
+	MemcacheMsgHandlerFactory factory;
 	SchoonerSockIOPool pool;
 
 	@BeforeClass
 	public void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
-		MemcacheMsgHandlerFactory factory = new HazelcastMemcacheMsgHandlerFactory(new Config(), 1, 1, 16, 536870912, 20, 10000);
-		
-		
+
 		int localPort = 54913;
 		try (ServerSocket s = new ServerSocket(0)) {
 			localPort = s.getLocalPort();
 		}
-
 		System.out.println("Localport: "+localPort);
-		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory(), 100);
-		server.start();
+
+		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 100);
+		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
+		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
+		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
 
 		String[] servers =
 			{
@@ -82,7 +83,7 @@ public class HazelcastMemcacheWhalinTest {
 	@AfterClass
 	public void after() throws Exception {
 		pool.shutDown();
-		server.shutdown();
+		factory.shutdown();
 	}
 
 	@Test

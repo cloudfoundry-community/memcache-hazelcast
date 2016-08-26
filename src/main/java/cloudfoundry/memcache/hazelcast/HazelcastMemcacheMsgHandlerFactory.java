@@ -3,6 +3,8 @@ package cloudfoundry.memcache.hazelcast;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -15,34 +17,191 @@ import org.slf4j.LoggerFactory;
 import cloudfoundry.memcache.AuthMsgHandler;
 import cloudfoundry.memcache.MemcacheMsgHandler;
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
+import cloudfoundry.memcache.MemcacheServer;
 
 import com.hazelcast.config.Config;
+import com.hazelcast.config.EvictionPolicy;
 import com.hazelcast.config.ExecutorConfig;
+import com.hazelcast.config.JoinConfig;
+import com.hazelcast.config.ListenerConfig;
+import com.hazelcast.config.MapConfig;
+import com.hazelcast.config.MaxSizeConfig;
+import com.hazelcast.config.MemberGroupConfig;
+import com.hazelcast.config.MulticastConfig;
+import com.hazelcast.config.NearCacheConfig;
+import com.hazelcast.config.NetworkConfig;
+import com.hazelcast.config.PartitionGroupConfig;
+import com.hazelcast.config.QuorumConfig;
+import com.hazelcast.config.QuorumListenerConfig;
 import com.hazelcast.config.ReplicatedMapConfig;
 import com.hazelcast.config.SerializerConfig;
+import com.hazelcast.config.TcpIpConfig;
+import com.hazelcast.config.MaxSizeConfig.MaxSizePolicy;
+import com.hazelcast.config.NearCacheConfig.LocalUpdatePolicy;
+import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
+import com.hazelcast.core.LifecycleEvent;
+import com.hazelcast.core.LifecycleListener;
 import com.hazelcast.core.PartitionService;
+import com.hazelcast.core.LifecycleEvent.LifecycleState;
+import com.hazelcast.quorum.Quorum;
+import com.hazelcast.quorum.QuorumEvent;
+import com.hazelcast.quorum.QuorumListener;
 
 public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFactory {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastMemcacheMsgHandlerFactory.class);
+	private static final String MEMCACHE_QUORUM_RULE = "memcacheQuorumRule";
 	public static final String EXECUTOR_INSTANCE_NAME = "memcache";
 
 	private final HazelcastInstance instance;
-	private final long localMemberSafeTimeout;
-	private final int minimumClusterMembers;
-	private final ScheduledExecutorService executor;
+	private ScheduledExecutorService executor;
+	private volatile boolean shuttingDown = false;
 
-	public HazelcastMemcacheMsgHandlerFactory(Config config,
-			long localMemberSafeTimeout,
-			int minimumClusterMembers,
-			int executorPoolSize,
-			long totalHeap,
-			int percentToTrim,
-			int trimDelay) {
-		this.localMemberSafeTimeout = localMemberSafeTimeout;
-		this.minimumClusterMembers = minimumClusterMembers;
+	public HazelcastMemcacheMsgHandlerFactory(MemcacheServer memcacheServer, MemcacheHazelcastConfig appConfig) {
+		Config config = new Config();
+		for (Map.Entry<String, MemcacheHazelcastConfig.Plan> plan : appConfig.getPlans().entrySet()) {
+			LOGGER.info("Configuring plan: " + plan.getKey());
+			MapConfig mapConfig = new MapConfig(plan.getKey() + "*");
+			mapConfig.setStatisticsEnabled(true);
+			mapConfig.setBackupCount(plan.getValue().getBackup());
+			mapConfig.setAsyncBackupCount(plan.getValue().getAsyncBackup());
+			if(plan.getValue().getEvictionPolicy() == EvictionPolicy.LRU) {
+				mapConfig.setMapEvictionPolicy(LRUCreatedOrUpdateEvictionPolicy.INSTANCE);
+			} else {
+				mapConfig.setEvictionPolicy(plan.getValue().getEvictionPolicy());
+			}
+			mapConfig.setMaxIdleSeconds(plan.getValue().getMaxIdleSeconds());
+			mapConfig.setMaxSizeConfig(
+					new MaxSizeConfig(plan.getValue().getMaxSizeUsedHeap(), MaxSizePolicy.USED_HEAP_SIZE));
+			if (plan.getValue().getNearCache() != null) {
+				NearCacheConfig nearCacheConfig = new NearCacheConfig();
+				nearCacheConfig.setInvalidateOnChange(true);
+				nearCacheConfig.setCacheLocalEntries(false);
+				nearCacheConfig.setLocalUpdatePolicy(LocalUpdatePolicy.INVALIDATE);
+				nearCacheConfig.setMaxSize(plan.getValue().getNearCache().getMaxSize());
+				nearCacheConfig.setTimeToLiveSeconds(plan.getValue().getNearCache().getTtlSeconds());
+				nearCacheConfig.setMaxIdleSeconds(plan.getValue().getNearCache().getMaxIdleSeconds());
+				nearCacheConfig.setEvictionPolicy(plan.getValue().getNearCache().getEvictionPolicy());
+				mapConfig.setNearCacheConfig(nearCacheConfig);
+			}
+			config.addMapConfig(mapConfig);
+		}
+		NetworkConfig networkConfig = new NetworkConfig().setReuseAddress(true);
+		config.setNetworkConfig(networkConfig);
+		if(appConfig.getHazelcast().getPort() != null) {
+			networkConfig.setPort(appConfig.getHazelcast().getPort());
+		}
+		networkConfig.setPortAutoIncrement(false);
+		JoinConfig joinConfig = new JoinConfig();
+		networkConfig.setJoin(joinConfig);
+		joinConfig.setMulticastConfig(new MulticastConfig().setEnabled(false));
+		TcpIpConfig tcpIpConfig = new TcpIpConfig().setEnabled(true);
+		joinConfig.setTcpIpConfig(tcpIpConfig);
+		PartitionGroupConfig partitionGroupConfig = new PartitionGroupConfig();
+		config.setPartitionGroupConfig(partitionGroupConfig);
+		partitionGroupConfig.setEnabled(true);
+		partitionGroupConfig.setGroupType(MemberGroupType.CUSTOM);
+		for (Map.Entry<String, List<String>> zone : appConfig.getHazelcast().getMachines().entrySet()) {
+			MemberGroupConfig memberGroupConfig = new MemberGroupConfig();
+			for (String machine : zone.getValue()) {
+				tcpIpConfig.addMember(machine);
+				memberGroupConfig.addInterface(machine);
+			}
+			partitionGroupConfig.addMemberGroupConfig(memberGroupConfig);
+		}
+		config.setProperty("hazelcast.memcache.enabled", "false");
+		config.setProperty("hazelcast.rest.enabled", "false");
+		config.setProperty("hazelcast.shutdownhook.enabled", "false");
+		config.setProperty("hazelcast.logging.type", "slf4j");
+		config.setProperty("hazelcast.phone.home.enabled", "false");
+		config.setProperty("hazelcast.backpressure.enabled", "true");
+		config.setProperty("hazelcast.jmx", "true");
+		setPropertyIfNotNull(config, "hazelcast.io.thread.count", appConfig.getHazelcast().getIoThreadCount());
+		setPropertyIfNotNull(config, "hazelcast.operation.thread.count", appConfig.getHazelcast().getOperationThreadCount());
+		setPropertyIfNotNull(config, "hazelcast.operation.generic.thread.count", appConfig.getHazelcast().getOperationGenericThreadCount());
+		setPropertyIfNotNull(config, "hazelcast.event.thread.count", appConfig.getHazelcast().getEventThreadCount());
+		setPropertyIfNotNull(config, "hazelcast.client.event.thread.count", appConfig.getHazelcast().getClientEventThreadCount());
+		setPropertyIfNotNull(config, "hazelcast.partition.count", appConfig.getHazelcast().getPartitionCount());
+		setPropertyIfNotNull(config, "hazelcast.max.no.heartbeat.seconds", appConfig.getHazelcast().getMaxNoHeartbeatSeconds());
+		setPropertyIfNotNull(config, "hazelcast.operation.call.timeout.millis", appConfig.getHazelcast().getOperationCallTimeout());
+		setPropertyIfNotNull(config, "hazelcast.socket.receive.buffer.size", appConfig.getHazelcast().getReceiveBufferSize());
+		setPropertyIfNotNull(config, "hazelcast.socket.send.buffer.size", appConfig.getHazelcast().getSendBufferSize());
+		config.setProperty("hazelcast.socket.connect.timeout.seconds", "30");
+		config.setProperty("hazelcast.slow.operation.detector.enabled", "false");
+		config.setProperty("hazelcast.diagnostics.enabled", "false");
+		setPropertyIfNotNull(config, "hazelcast.partition.migration.timeout", appConfig.getHazelcast().getMaxNoHeartbeatSeconds());
+		config.setProperty("hazelcast.max.join.seconds", "30");
+		config.setProperty("hazelcast.max.no.master.confirmation.seconds", "60");
+		config.setProperty("hazelcast.member.list.publish.interval.seconds", "90");
+		config.addListenerConfig(new ListenerConfig(new ShutdownListener()));
+		QuorumConfig quorumConfig = null;
+		if(appConfig.getHazelcast().getMinimumClusterMembers() != null && appConfig.getHazelcast().getMinimumClusterMembers() > 1) {
+			QuorumListenerConfig listenerConfig = new QuorumListenerConfig();
+			listenerConfig.setImplementation(new QuorumListener() {
+				@Override
+				public void onChange(QuorumEvent quorumEvent) {
+					try {
+						if (quorumEvent.isPresent()) {
+							if(appConfig.getHazelcast().getEnableMemoryTrimmer()) {
+								if(executor == null) {
+									executor = new ScheduledThreadPoolExecutor(1);
+									executor.scheduleWithFixedDelay(new MaxHeapTrimmer(HazelcastMemcacheMsgHandlerFactory.this, appConfig.getHazelcast().getMaxCacheSize(), appConfig.getHazelcast().getPercentToTrim()), appConfig.getHazelcast().getTrimDelay(), appConfig.getHazelcast().getTrimDelay(), TimeUnit.SECONDS);
+								}
+							}
+							memcacheServer.start(HazelcastMemcacheMsgHandlerFactory.this);
+						} else {
+							memcacheServer.shutdown();
+							if(executor != null) {
+								executor.shutdown();
+								executor = null;
+							}
+						}
+					} catch(Exception e) {
+						LOGGER.error("Unexpected Error in QuorumListener.  Shutting Down Hazelcast.", e);
+						System.exit(1);
+					}
+				}
+			});
+			quorumConfig = new QuorumConfig();
+			quorumConfig.setName(MEMCACHE_QUORUM_RULE);
+			quorumConfig.setEnabled(true);
+			quorumConfig.setSize(appConfig.getHazelcast().getMinimumClusterMembers());
+			quorumConfig.addListenerConfig(listenerConfig);
+			config.addQuorumConfig(quorumConfig);
+			for(MapConfig entry : config.getMapConfigs().values()) {
+				entry.setQuorumName(MEMCACHE_QUORUM_RULE);
+			}
+		} else {
+			config.addListenerConfig(new ListenerConfig(new LifecycleListener() {
+				
+				@Override
+				public void stateChanged(LifecycleEvent event) {
+					try {
+						if(LifecycleState.STARTED.equals(event.getState())) {
+							if(appConfig.getHazelcast().getEnableMemoryTrimmer()) {
+								if(executor == null) {
+									executor = new ScheduledThreadPoolExecutor(1);
+									executor.scheduleWithFixedDelay(new MaxHeapTrimmer(HazelcastMemcacheMsgHandlerFactory.this, appConfig.getHazelcast().getMaxCacheSize(), appConfig.getHazelcast().getPercentToTrim()), appConfig.getHazelcast().getTrimDelay(), appConfig.getHazelcast().getTrimDelay(), TimeUnit.SECONDS);
+								}
+							}
+							memcacheServer.start(HazelcastMemcacheMsgHandlerFactory.this);
+						}
+						if(LifecycleState.SHUTTING_DOWN.equals(event.getState())) {
+							memcacheServer.shutdown();
+							if(executor != null) {
+								executor.shutdown();
+								executor = null;
+							}
+						}
+					} catch(Exception e) {
+						LOGGER.error("Unexpected Error in LifecycleListener.  Shutting Down Hazelcast.", e);
+						System.exit(1);
+					}
+				}
+			}));
+		}
 
 		SerializerConfig serializerConfig = new SerializerConfig().setImplementation(new HazelcastMemcacheCacheValueSerializer()).setTypeClass(
 				HazelcastMemcacheCacheValue.class);
@@ -51,18 +210,35 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.addReplicatedMapConfig(new ReplicatedMapConfig().setName(Stat.STAT_MAP));
 
 		ExecutorConfig executorConfig = new ExecutorConfig().setStatisticsEnabled( false );
-		if(executorPoolSize == 0) {
+		if(appConfig.getHazelcast().getExecutorPoolSize() == null || appConfig.getHazelcast().getExecutorPoolSize() == 0) {
 			executorConfig.setPoolSize(Runtime.getRuntime().availableProcessors()*2);
 		} else {
-			executorConfig.setPoolSize(executorPoolSize);
+			executorConfig.setPoolSize(appConfig.getHazelcast().getExecutorPoolSize());
 		}
 		
 		config.setExecutorConfigs(Collections.singletonMap(EXECUTOR_INSTANCE_NAME, executorConfig));
 
 		instance = Hazelcast.newHazelcastInstance(config);
 		instance.getReplicatedMap(Stat.STAT_MAP).putIfAbsent(Stat.UPTIME_KEY, System.currentTimeMillis());
-		executor = new ScheduledThreadPoolExecutor(1);
-		executor.scheduleWithFixedDelay(new MaxHeapTrimmer(instance, totalHeap, percentToTrim), trimDelay, trimDelay, TimeUnit.SECONDS);
+	}
+	
+	private class ShutdownListener implements LifecycleListener {
+		@Override
+		public void stateChanged(LifecycleEvent event) {
+			if(LifecycleState.SHUTDOWN.equals(event.getState())) {
+				LOGGER.info("Hazelcast Server is shutdown.");
+				if(!shuttingDown) {
+					LOGGER.info("Irregular shutdown detected.  Exiting the process.");
+					System.exit(1);
+				}
+			}
+		}
+	}
+	
+	private void setPropertyIfNotNull(Config config, String property, Object value) {
+		if(value != null) {
+			config.setProperty(property, value.toString());
+		}
 	}
 	
 	public HazelcastInstance getInstance() {
@@ -91,37 +267,14 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		}
 	}
 
-	@Override
-	public boolean isReady() {
-		int clusterSize = instance.getCluster().getMembers().size();
-		if(clusterSize >= minimumClusterMembers) {
-			return true;
-		} else {
-			LOGGER.warn("Hazelcast is not ready because this node is only connected to "+clusterSize+" of the required "+minimumClusterMembers+" cluster members." );
-		}
-		return false;
-	}
-
-	@Override
-	public boolean isRunning() {
-		return instance.getLifecycleService().isRunning();
-	}
-
 	@PreDestroy
 	public void shutdown() {
-		LOGGER.info("Shutting down Hazelcast.");
-		try {
-			executor.shutdown();
-		} catch(Throwable t) {
-			LOGGER.error("Unexpected error shutting down scheduled executor.", t);
-		}
-		try {
-			PartitionService partitionService = instance.getPartitionService();
-			if (!partitionService.isLocalMemberSafe()) {
-				partitionService.forceLocalMemberToBeSafe(localMemberSafeTimeout, TimeUnit.SECONDS);
+		if(!shuttingDown) {
+			LOGGER.info("Shutting down Hazelcast.");
+			shuttingDown = true;
+			if(instance != null) {
+				instance.shutdown();
 			}
-		} finally {
-			instance.shutdown();
 		}
 	}
 }

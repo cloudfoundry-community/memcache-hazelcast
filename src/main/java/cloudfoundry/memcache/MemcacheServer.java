@@ -1,5 +1,8 @@
 package cloudfoundry.memcache;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
@@ -9,33 +12,23 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheServerCodec;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class MemcacheServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheServer.class);
 	
-	private final MemcacheMsgHandlerFactory msgHandlerFactory;
 	private EventLoopGroup bossGroup;
 	private EventLoopGroup workerGroup;
 	private boolean started = false;
-	private volatile boolean running = false;
 	private final int port;
 	private final AuthMsgHandlerFactory authMsgHandlerFactory;
 	private int queueSize;
 
-	public MemcacheServer(MemcacheMsgHandlerFactory msgHandlerFactory, int port, AuthMsgHandlerFactory authMsgHandlerFactory, int queueSize) {
-		this.msgHandlerFactory = msgHandlerFactory;
+	public MemcacheServer(int port, AuthMsgHandlerFactory authMsgHandlerFactory, int queueSize) {
 		this.port = port;
 		this.authMsgHandlerFactory = authMsgHandlerFactory;
 		this.queueSize = queueSize;
 	}
 
-	@PostConstruct
-	public void start() {
+	public void start(MemcacheMsgHandlerFactory msgHandlerFactory) {
 		bossGroup = new NioEventLoopGroup(1);
 		workerGroup = new NioEventLoopGroup();
 
@@ -53,46 +46,22 @@ public class MemcacheServer {
 				.childOption(ChannelOption.TCP_NODELAY, true)
 				.childOption(ChannelOption.SO_KEEPALIVE, true);
 
-		new Thread(new Runnable() {
-			public void run() {
-				try {
-					LOGGER.info("Waiting for the Memcache Backend to be ready to accept connections.");
-					while (!msgHandlerFactory.isReady() && !Thread.interrupted()) {
-						LOGGER.warn("Memcache backend not ready.  Waiting 5 sec.");
-						Thread.sleep(5000);
-					}
-					if (msgHandlerFactory.isReady()) {
-						b.bind(port).sync();
-						LOGGER.info("Memcached server started on port: "+port);
-						running = true;
-					} else {
-						LOGGER.error("Memcache server never got ready.  Terminating process.");
-						System.exit(1);
-						return;
-					}
-				} catch (Throwable e) {
-					LOGGER.error("Memcache server never got ready.  Terminating process.", e);
-					System.exit(1);
-				}
-			}
-		}).start();
+		try {
+			b.bind(port).sync();
+		} catch (InterruptedException e) {
+			throw new RuntimeException("Binding to port interrupted.", e);
+		}
+		LOGGER.info("Memcached server started on port: "+port);
 	}
 	
-	@PreDestroy
 	public void shutdown() {
-		LOGGER.info("Shutting down memcache server.");
 		if (started) {
+			LOGGER.info("Shutting down memcache server.");
 			LOGGER.info("Shutting down boss thread group.");
 			bossGroup.shutdownGracefully().awaitUninterruptibly();
 			LOGGER.info("Shutting down worker thread group.");
 			workerGroup.shutdownGracefully().awaitUninterruptibly();
 		}
-		running = false;
+		started = false;
 	}
-
-	public boolean isRunning() {
-		return running;
-	}
-	
-
 }

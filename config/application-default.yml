@@ -19,6 +19,7 @@ hazelcast:
   localMemberSafeTimeout: 120
   minimumClusterMembers: 1
   executorPoolSize: 0
+  enableMemoryTrimmer: true
   maxCacheSize: 536870912
   percentToTrim: 20
   trimDelay: 10

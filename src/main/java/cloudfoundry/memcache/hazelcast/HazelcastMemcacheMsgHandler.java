@@ -142,7 +142,10 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					//Task Was cancelled.  Ignoring this exception.
 					return;
 				}
-				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
+				LOGGER.error("Error invoking "+opcode+" asyncronously.  Message: "+t.getMessage());
+				if(LOGGER.isDebugEnabled()) {
+					LOGGER.debug("Error invoking "+opcode+" asyncronously.", t);
+				}
 				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
 			}
 		};
