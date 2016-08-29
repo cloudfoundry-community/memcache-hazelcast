@@ -12,7 +12,6 @@ import cf.dropsonde.spring.boot.EnableMetronClient;
 import cloudfoundry.memcache.AuthMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
-import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 import cloudfoundry.memcache.web.HttpBasicAuthenticator;
 
 @SpringBootApplication
@@ -30,9 +29,6 @@ public class Main {
 
 	@Bean
 	AuthMsgHandlerFactory authHandlerFactory(MemcacheHazelcastConfig config) {
-		if (config.getMemcache().getSecretKey() == null || config.getMemcache().getSecretKey().isEmpty()) {
-			return new StubAuthMsgHandlerFactory();
-		}
 		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey(), config.getMemcache().getTestUser(), config.getMemcache().getTestPassword(), config.getMemcache().getTestCache());
 	}
 
