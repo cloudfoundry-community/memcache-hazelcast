@@ -23,6 +23,8 @@ import org.testng.annotations.Test;
 
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.SecretKeyAuthMsgHandler;
+import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
 import com.hazelcast.config.Config;
@@ -42,16 +44,19 @@ public class HazelcastMemcacheSpyTest {
 		}
 
 		System.out.println("Localport: "+localPort);
-		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 100);
+		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100);
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
 
+		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
+			Thread.sleep(1000);
+		}
 
 		ConnectionFactoryBuilder binaryConnectionFactory = new ConnectionFactoryBuilder();
 		binaryConnectionFactory.setProtocol(Protocol.BINARY);
-		binaryConnectionFactory.setAuthDescriptor(new AuthDescriptor(null, new PlainCallbackHandler("small|blah|blah", "somePassword")));
+		binaryConnectionFactory.setAuthDescriptor(new AuthDescriptor(null, new PlainCallbackHandler("test", "test")));
 		binaryConnectionFactory.setShouldOptimize(false);
 		binaryConnectionFactory.setAuthWaitTime(10000000);
 		binaryConnectionFactory.setOpTimeout(10000000);
@@ -60,7 +65,6 @@ public class HazelcastMemcacheSpyTest {
 		binaryConnectionFactory.setTranscoder(t);
 
 		 c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:"+localPort));
-//		 c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:11211"));
 	}
 	
 	@AfterClass

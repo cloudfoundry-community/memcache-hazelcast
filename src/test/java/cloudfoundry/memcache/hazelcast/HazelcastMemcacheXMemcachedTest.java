@@ -19,6 +19,7 @@ import org.testng.annotations.Test;
 
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
 import com.hazelcast.config.Config;
@@ -39,12 +40,15 @@ public class HazelcastMemcacheXMemcachedTest {
 		}
 
 		System.out.println("Localport: "+localPort);
-		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 100);
+		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100);
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
-
+		
+		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
+			Thread.sleep(1000);
+		}
 
 		String[] servers =
 			{
@@ -55,7 +59,7 @@ public class HazelcastMemcacheXMemcachedTest {
 		List<InetSocketAddress> addresses = AddrUtil.getAddresses("localhost:"+localPort);
 		XMemcachedClientBuilder builder = new XMemcachedClientBuilder("localhost:"+localPort);
 		Map<InetSocketAddress, net.rubyeye.xmemcached.auth.AuthInfo> authInfo = new HashMap<>();
-		authInfo.put(addresses.get(0), net.rubyeye.xmemcached.auth.AuthInfo.plain("user", "password"));
+		authInfo.put(addresses.get(0), net.rubyeye.xmemcached.auth.AuthInfo.plain("test", "test"));
 		builder.setAuthInfoMap(authInfo);
 		builder.setCommandFactory(new BinaryCommandFactory());
 		builder.setConnectTimeout(10000000);

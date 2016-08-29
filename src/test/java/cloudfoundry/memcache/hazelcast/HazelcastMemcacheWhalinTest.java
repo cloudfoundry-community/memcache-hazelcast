@@ -10,6 +10,7 @@ import org.testng.annotations.Test;
 
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
 import com.hazelcast.config.Config;
@@ -34,10 +35,14 @@ public class HazelcastMemcacheWhalinTest {
 		}
 		System.out.println("Localport: "+localPort);
 
-		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 100);
+		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100);
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
+
+		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
+			Thread.sleep(1000);
+		}
 
 		String[] servers =
 			{
@@ -45,7 +50,7 @@ public class HazelcastMemcacheWhalinTest {
 			};
 
 		// grab an instance of our connection pool
-		pool = SchoonerSockIOPool.getInstance(AuthInfo.plain("username", "password"));
+		pool = SchoonerSockIOPool.getInstance(AuthInfo.plain("test", "test"));
 
 		// set the servers and the weights
 		pool.setServers( servers );

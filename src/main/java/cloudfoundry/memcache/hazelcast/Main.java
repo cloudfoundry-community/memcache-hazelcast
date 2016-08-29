@@ -33,7 +33,7 @@ public class Main {
 		if (config.getMemcache().getSecretKey() == null || config.getMemcache().getSecretKey().isEmpty()) {
 			return new StubAuthMsgHandlerFactory();
 		}
-		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey());
+		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey(), config.getMemcache().getTestUser(), config.getMemcache().getTestPassword(), config.getMemcache().getTestCache());
 	}
 
 	@Bean

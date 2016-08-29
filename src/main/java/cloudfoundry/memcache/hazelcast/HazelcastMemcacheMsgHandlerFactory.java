@@ -300,7 +300,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		if(!instance.getPartitionService().isLocalMemberSafe()) {
 			return "LocalMemberNotSafe";
 		}
-		return "OK";
+		return OK_STATUS;
 	}
 
 	@PreDestroy

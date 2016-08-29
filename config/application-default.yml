@@ -10,8 +10,11 @@ server:
 
 memcache:
   port: 54913
-  secretKey:
+  secretKey: secret
   maxQueueSize: 1000
+  testUser: test
+  testPassword: test
+  testCache: test
 
 hazelcast:
   metricsPublishInterval: 120000
@@ -42,6 +45,12 @@ host:
   password: password
 
 plans:
+  test:
+    backup: 0
+    asyncBackup: 0
+    evictionPolicy: LRU
+    maxIdleSeconds: 100
+    maxSizeUsedHeap: 1
   small:
     backup: 0
     asyncBackup: 0

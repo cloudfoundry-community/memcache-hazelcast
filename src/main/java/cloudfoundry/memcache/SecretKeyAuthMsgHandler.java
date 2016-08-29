@@ -27,9 +27,16 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	private String key;
 	private UUID appGuid;
 	private String cacheName;
+	private final String testUser;
+	private final String testPassword;
+	private final String testCacheName;
+	
 
-	public SecretKeyAuthMsgHandler(String key) {
+	public SecretKeyAuthMsgHandler(String key, String testUser, String testPassword, String testCacheName) {
 		this.key = key;
+		this.testUser = testUser;
+		this.testPassword = testPassword;
+		this.testCacheName = testCacheName;
 	}
 
 	@Override
@@ -68,8 +75,12 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 		boolean validPassword = validatePassword(username, password);
 		if (validPassword) {
 			authenticated = true;
-			cacheName = username.substring(0, username.lastIndexOf('|'));
-			appGuid = UUID.fromString(username.substring(username.lastIndexOf('|')+1, username.length()));
+			if(testUser.equals(username)) {
+				cacheName = testCacheName;
+			} else {
+				cacheName = username.substring(0, username.lastIndexOf('|'));
+				appGuid = UUID.fromString(username.substring(username.lastIndexOf('|')+1, username.length()));
+			}
 			BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
 			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 			response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
@@ -83,6 +94,9 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	}
 
 	private boolean validatePassword(String username, String password) {
+		if(testUser.equals(username)) {
+			return testPassword.equals(password);
+		}
 		byte[] hash = DigestUtils.sha384((username + key));
 		return Base64.encodeBase64String(hash).equals(password);
 	}

@@ -2,17 +2,25 @@ package cloudfoundry.memcache;
 
 public class SecretKeyAuthMsgHandlerFactory implements AuthMsgHandlerFactory {
 
-	private String key;
+	private final String key;
+	private final String testUser;
+	private final String testPassword;
+	private final String testCacheName;
+
 	
-	public SecretKeyAuthMsgHandlerFactory(String key) {
+	public SecretKeyAuthMsgHandlerFactory(String key, String testUser, String testPassword, String testCacheName) {
 		if(key == null) {
 			throw new IllegalArgumentException("null key");
 		}
 		this.key = key;
+		this.testUser = testUser;
+		this.testPassword = testPassword;
+		this.testCacheName = testCacheName;
+
 	}
 
 	@Override
 	public AuthMsgHandler createAuthMsgHandler() {
-		return new SecretKeyAuthMsgHandler(key);
+		return new SecretKeyAuthMsgHandler(key, testUser, testPassword, testCacheName);
 	}
 }

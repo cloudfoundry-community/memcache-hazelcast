@@ -35,7 +35,9 @@ public class HazelcastMemcapableTest {
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
 
-
+		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
+			Thread.sleep(1000);
+		}
 	}
 
 	@AfterClass

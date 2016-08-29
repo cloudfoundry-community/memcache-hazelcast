@@ -2,6 +2,7 @@ package cloudfoundry.memcache;
 
 import static org.testng.Assert.*;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.memcache.DefaultMemcacheContent;
 import io.netty.handler.codec.memcache.MemcacheContent;
@@ -19,10 +20,13 @@ import org.testng.annotations.Test;
 public class SecretKeyAuthMsgHandlerTest {
 
 	private static final String SECRET_KEY = "some secret key";
+	private static final String TEST_USER = "test-user";
+	private static final String TEST_PASSWORD = "test-password";
+	private static final String TEST_CACHE = "test-cache";
 
 	@Test
 	public void testAuthSuccess() {
-		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY);
+		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
 		assertFalse(authHandler.isAuthenticated());
 		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
 		request.setOpaque(1234);
@@ -33,6 +37,8 @@ public class SecretKeyAuthMsgHandlerTest {
 		byte[] encodedAuth = createdEncodedAuth(username, appGuid, password);
 		request.setTotalBodyLength(encodedAuth.length);
 		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
+		Channel channelMock = EasyMock.createNiceMock(Channel.class);
+		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
 		authHandler.startAuth(ctxMock , request);
 		
@@ -46,7 +52,7 @@ public class SecretKeyAuthMsgHandlerTest {
 
 	@Test
 	public void testAuthFailure() {
-		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY);
+		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
 		assertFalse(authHandler.isAuthenticated());
 		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
 		request.setOpaque(1234);
@@ -57,7 +63,10 @@ public class SecretKeyAuthMsgHandlerTest {
 		byte[] encodedAuth = createdEncodedAuth(username, appGuid, password);
 		request.setTotalBodyLength(encodedAuth.length);
 		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
+		Channel channelMock = EasyMock.createNiceMock(Channel.class);
+		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
+		EasyMock.replay(channelMock);
 		authHandler.startAuth(ctxMock , request);
 		
 		MemcacheContent content = new DefaultMemcacheContent(Unpooled.wrappedBuffer(encodedAuth));
@@ -65,9 +74,34 @@ public class SecretKeyAuthMsgHandlerTest {
 		assertFalse(authHandler.isAuthenticated());
 	}
 
+	@Test
+	public void testTestUserSuccess() {
+		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
+		assertFalse(authHandler.isAuthenticated());
+		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
+		request.setOpaque(1234);
+		request.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
+		String username = TEST_USER;
+		String password = TEST_PASSWORD;
+		byte[] encodedAuth = createdEncodedAuth(username, null, password);
+		request.setTotalBodyLength(encodedAuth.length);
+		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
+		Channel channelMock = EasyMock.createNiceMock(Channel.class);
+		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
+		EasyMock.replay(ctxMock);
+		authHandler.startAuth(ctxMock , request);
+		
+		MemcacheContent content = new DefaultMemcacheContent(Unpooled.wrappedBuffer(encodedAuth));
+		authHandler.startAuth(ctxMock, content);
+		assertTrue(authHandler.isAuthenticated());
+		assertEquals(authHandler.getCacheName(), TEST_CACHE);
+	}
+
 	private byte[] createdEncodedAuth(String username, UUID appGuid, String password) {
-		String appGuidString = appGuid.toString();
-		String fullUsername = username+'|'+appGuidString;
+		String fullUsername = username;
+		if(appGuid != null) {
+			fullUsername = username+'|'+appGuid.toString();
+		}
 		byte[] encodedAuth =  new byte[1+fullUsername.length()+1+password.length()];
 		System.arraycopy(fullUsername.getBytes(), 0, encodedAuth, 1, fullUsername.length());
 		System.arraycopy(password.getBytes(), 0, encodedAuth, fullUsername.length()+2, password.length());

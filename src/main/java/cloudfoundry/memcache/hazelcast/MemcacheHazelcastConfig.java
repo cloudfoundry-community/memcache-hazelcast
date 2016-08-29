@@ -288,7 +288,10 @@ public class MemcacheHazelcastConfig {
 	
 	public static class Memcache {
 		@NotNull Integer port;
-		String secretKey;
+		@NotEmpty String secretKey;
+		@NotEmpty String testUser;
+		@NotEmpty String testPassword;
+		@NotEmpty String testCache;
 		@NotNull Integer maxQueueSize;
 		
 		public Integer getPort() {
@@ -302,6 +305,24 @@ public class MemcacheHazelcastConfig {
 		}
 		public void setSecretKey(String secretKey) {
 			this.secretKey = secretKey;
+		}
+		public String getTestUser() {
+			return testUser;
+		}
+		public void setTestUser(String testUser) {
+			this.testUser = testUser;
+		}
+		public String getTestPassword() {
+			return testPassword;
+		}
+		public void setTestPassword(String testPassword) {
+			this.testPassword = testPassword;
+		}
+		public String getTestCache() {
+			return testCache;
+		}
+		public void setTestCache(String testCache) {
+			this.testCache = testCache;
 		}
 		public Integer getMaxQueueSize() {
 			return maxQueueSize;
