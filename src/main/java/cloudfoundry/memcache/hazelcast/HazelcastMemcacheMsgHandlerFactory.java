@@ -133,6 +133,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.slow.operation.detector.enabled", "false");
 		config.setProperty("hazelcast.diagnostics.enabled", "false");
 		setPropertyIfNotNull(config, "hazelcast.partition.migration.timeout", appConfig.getHazelcast().getMaxNoHeartbeatSeconds());
+		setPropertyIfNotNull(config, "hazelcast.graceful.shutdown.max.wait", appConfig.getHazelcast().getLocalMemberSafeTimeout());
 		config.setProperty("hazelcast.max.join.seconds", "30");
 		config.setProperty("hazelcast.max.no.master.confirmation.seconds", "60");
 		config.setProperty("hazelcast.member.list.publish.interval.seconds", "90");
