@@ -6,5 +6,6 @@ public interface MemcacheMsgHandlerFactory {
 	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler);
 	public void deleteCache(String name);
 	public void shutdown();
+	public void shutdownNow();
 	public String status();
 }

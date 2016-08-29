@@ -272,7 +272,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	@Override
 	public String status() {
 		if(shuttingDown)  {
-			return "Shutdown";
+			return "Shuttingdown";
 		}
 		if(instance == null) {
 			return "InstanceNull";
@@ -302,4 +302,15 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 			}
 		}
 	}
+
+	public void shutdownNow() {
+		if(!shuttingDown) {
+			LOGGER.info("Terminating Hazelcast.");
+			shuttingDown = true;
+			if(instance != null) {
+				instance.getLifecycleService().terminate();
+			}
+		}
+	}
+
 }

@@ -25,11 +25,15 @@ import org.slf4j.LoggerFactory;
 import cloudfoundry.memcache.AuthMsgHandler;
 import cloudfoundry.memcache.CompletedFuture;
 import cloudfoundry.memcache.MemcacheMsgHandler;
+import cloudfoundry.memcache.MemcacheServer;
 import cloudfoundry.memcache.MemcacheUtils;
 
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.ExecutionCallback;
+import com.hazelcast.core.HazelcastException;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.HazelcastInstanceNotActiveException;
+import com.hazelcast.core.HazelcastOverloadException;
 import com.hazelcast.core.ICompletableFuture;
 import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.IMap;
@@ -81,6 +85,25 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	public HazelcastInstance getInstance() {
 		return instance;
 	}
+	
+	private Future<?> handleException(ChannelHandlerContext ctx, Throwable t) {
+		if(t instanceof HazelcastInstanceNotActiveException) {
+			LOGGER.error("Failed to invoke operation. Hazelcast instance not active.  Shutting down the the server.", t);
+			throw (HazelcastInstanceNotActiveException)t;
+		}
+		if(LOGGER.isDebugEnabled()) {
+			LOGGER.debug("Error invoking "+opcode+" asyncronously.", t);
+		}
+		if(t instanceof HazelcastOverloadException) {
+			LOGGER.error("Failed to invoke operation. System is currently overloaded.  Sending Failure.");
+			return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
+		}
+		if(t instanceof HazelcastException) {
+			LOGGER.error("Hazelcast Failed to handle the request.  Sending Failure response.");
+			return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
+		}
+		return CompletedFuture.INSTANCE;
+	}
 
 	@Override
 	public Future<?> get(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
@@ -88,69 +111,70 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 
 	private Future<?> handleGetRequest(ChannelHandlerContext ctx, BinaryMemcacheRequest request, byte nonQuietOpcode, boolean includeKey) {
-		MemcacheUtils.logRequest(request);
-
-		IMap<byte[], HazelcastMemcacheCacheValue> map = getCache();
-
-		ICompletableFuture<HazelcastMemcacheCacheValue> future = (ICompletableFuture<HazelcastMemcacheCacheValue>)map.getAsync(key);
-		ExecutionCallback<HazelcastMemcacheCacheValue> callback = new ExecutionCallback<HazelcastMemcacheCacheValue>() {
-			@Override
-			public void onResponse(HazelcastMemcacheCacheValue value) {
-				if (value == null && opcode == nonQuietOpcode) {
-					MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
-					return;
-				} else if (value == null) {
-					MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
-					return;
-				}
-
-				ByteBuf responseValue = value.getValue();
-				ByteBuf responseFlags = value.getFlags();
-
-				if(value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
-					long incDecValue = value.getValue().readLong();
-					try {
-						responseValue = Unpooled.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes("UTF-8"));
-						responseFlags = Unpooled.wrappedBuffer(new byte[4]);
-					} catch (UnsupportedEncodingException e) {
-						throw new RuntimeException(e);
+		try {
+			MemcacheUtils.logRequest(request);
+	
+			IMap<byte[], HazelcastMemcacheCacheValue> map = getCache();
+	
+			ICompletableFuture<HazelcastMemcacheCacheValue> future = (ICompletableFuture<HazelcastMemcacheCacheValue>)map.getAsync(key);
+			ExecutionCallback<HazelcastMemcacheCacheValue> callback = new ExecutionCallback<HazelcastMemcacheCacheValue>() {
+				@Override
+				public void onResponse(HazelcastMemcacheCacheValue value) {
+					if (value == null && opcode == nonQuietOpcode) {
+						MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key).send(ctx);
+						return;
+					} else if (value == null) {
+						MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
+						return;
 					}
+	
+					ByteBuf responseValue = value.getValue();
+					ByteBuf responseFlags = value.getFlags();
+	
+					if(value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
+						long incDecValue = value.getValue().readLong();
+						try {
+							responseValue = Unpooled.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes("UTF-8"));
+							responseFlags = Unpooled.wrappedBuffer(new byte[4]);
+						} catch (UnsupportedEncodingException e) {
+							throw new RuntimeException(e);
+						}
+					}
+	
+					FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags, responseValue);
+					response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+					response.setOpcode(opcode);
+					response.setCas(value.getCAS());
+					response.setOpaque(opaque);
+					if (includeKey) {
+						ByteBuf responseKey = Unpooled.wrappedBuffer(key);
+						response.setKey(responseKey);
+						response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity() + key.length);
+					} else {
+						response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
+					}
+					MemcacheUtils.writeAndFlush(ctx, response);
+					if (LOGGER.isDebugEnabled()) {
+						LOGGER.debug("Current Socket: " + ctx.channel().id() + " Flushed response for key: " + key);
+					}
+	
 				}
-
-				FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags, responseValue);
-				response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-				response.setOpcode(opcode);
-				response.setCas(value.getCAS());
-				response.setOpaque(opaque);
-				if (includeKey) {
-					ByteBuf responseKey = Unpooled.wrappedBuffer(key);
-					response.setKey(responseKey);
-					response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity() + key.length);
-				} else {
-					response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
+	
+				@Override
+				public void onFailure(Throwable t) {
+					if(t instanceof CancellationException) {
+						//Task Was cancelled.  Ignoring this exception.
+						return;
+					}
+					LOGGER.error("Error invoking "+opcode+" asyncronously.  Message: "+t.getMessage());
+					handleException(ctx, t);
 				}
-				MemcacheUtils.writeAndFlush(ctx, response);
-				if (LOGGER.isDebugEnabled()) {
-					LOGGER.debug("Current Socket: " + ctx.channel().id() + " Flushed response for key: " + key);
-				}
-
-			}
-
-			@Override
-			public void onFailure(Throwable t) {
-				if(t instanceof CancellationException) {
-					//Task Was cancelled.  Ignoring this exception.
-					return;
-				}
-				LOGGER.error("Error invoking "+opcode+" asyncronously.  Message: "+t.getMessage());
-				if(LOGGER.isDebugEnabled()) {
-					LOGGER.debug("Error invoking "+opcode+" asyncronously.", t);
-				}
-				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short)0x0084, t.getMessage()).send(ctx);
-			}
-		};
-		executeOrAddCallback(future, callback);
-		return future;
+			};
+			executeOrAddCallback(future, callback);
+			return future;
+		} catch(Exception e) {
+			return handleException(ctx, e);
+		}
 	}
 
 	private <T> void executeOrAddCallback(ICompletableFuture<T> future,
@@ -205,40 +229,44 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 
 	private Future<?> processSetAddReplaceContent(ChannelHandlerContext ctx, MemcacheContent content, byte nonQuietOpcode) {
-		cacheValue.writeValue(content.content());
-		if (content instanceof LastMemcacheContent) {
-			IExecutorService executor = getExecutor();
-			
-			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastSetCallable(authMsgHandler.getCacheName(), nonQuietOpcode, key, cas, cacheValue, expirationInSeconds), key);
-			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
-				@Override
-				public void onResponse(HazelcastMemcacheMessage response) {
-					if (response.isSuccess()) {
-						if (opcode == nonQuietOpcode) {
-							MemcacheUtils.returnSuccess(opcode, opaque, response.getCas(), null).send(ctx);
+		try {
+			cacheValue.writeValue(content.content());
+			if (content instanceof LastMemcacheContent) {
+				IExecutorService executor = getExecutor();
+				
+				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastSetCallable(authMsgHandler.getCacheName(), nonQuietOpcode, key, cas, cacheValue, expirationInSeconds), key);
+				ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
+					@Override
+					public void onResponse(HazelcastMemcacheMessage response) {
+						if (response.isSuccess()) {
+							if (opcode == nonQuietOpcode) {
+								MemcacheUtils.returnSuccess(opcode, opaque, response.getCas(), null).send(ctx);
+							} else {
+								MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+							}
 						} else {
-							MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+							MemcacheUtils.returnFailure(opcode, opaque, response.getCode(), response.getMsg()).send(ctx);
 						}
-					} else {
-						MemcacheUtils.returnFailure(opcode, opaque, response.getCode(), response.getMsg()).send(ctx);
 					}
-				}
-
-				public void onFailure(Throwable t) {
-					if(t instanceof CancellationException) {
-						//Task Was cancelled.  Ignoring this exception.
-						return;
+	
+					public void onFailure(Throwable t) {
+						if(t instanceof CancellationException) {
+							//Task Was cancelled.  Ignoring this exception.
+							return;
+						}
+						LOGGER.error("Error invoking opcode="+opcode+" asyncronously", t);
+						handleException(ctx, t);
 					}
-					LOGGER.error("Error invoking opcode="+opcode+" asyncronously", t);
-					MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
-				}
-			};
-			//Null out so it can get GCed No need to keep it now.
-			cacheValue = null;
-			executeOrAddCallback(future, callback);
-			return future;
+				};
+				//Null out so it can get GCed No need to keep it now.
+				cacheValue = null;
+				executeOrAddCallback(future, callback);
+				return future;
+			}
+			return null;
+		} catch(Exception e) {
+			return handleException(ctx, e);
 		}
-		return null;
 	}
 
 	@Override
@@ -263,36 +291,40 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> delete(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-		IExecutorService executor = getExecutor();
-
-		ICompletableFuture<Boolean> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastDeleteCallable(authMsgHandler.getCacheName(), key), key);
-		
-		ExecutionCallback<Boolean> callback = new ExecutionCallback<Boolean>() {
-			@Override
-			public void onResponse(Boolean response) {
-				if (response && opcode == BinaryMemcacheOpcodes.DELETE) {
-					MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
-				} else if (!response) {
-					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Entry not found.").send(ctx);
-				} else {
-					MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
+		try {
+			MemcacheUtils.logRequest(request);
+			IExecutorService executor = getExecutor();
+	
+			ICompletableFuture<Boolean> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastDeleteCallable(authMsgHandler.getCacheName(), key), key);
+			
+			ExecutionCallback<Boolean> callback = new ExecutionCallback<Boolean>() {
+				@Override
+				public void onResponse(Boolean response) {
+					if (response && opcode == BinaryMemcacheOpcodes.DELETE) {
+						MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+					} else if (!response) {
+						MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Entry not found.").send(ctx);
+					} else {
+						MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
+					}
 				}
-			}
-
-			public void onFailure(Throwable t) {
-				if(t instanceof CancellationException) {
-					//Task Was cancelled.  Ignoring this exception.
-					return;
+	
+				public void onFailure(Throwable t) {
+					if(t instanceof CancellationException) {
+						//Task Was cancelled.  Ignoring this exception.
+						return;
+					}
+					LOGGER.error("Error invoking "+opcode+" asyncronously", t);
+					handleException(ctx, t);
 				}
-				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
-				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
-			}
-		};
-
-		executeOrAddCallback(future, callback);
-		
-		return future;
+			};
+	
+			executeOrAddCallback(future, callback);
+			
+			return future;
+		} catch(Exception e) {
+			return handleException(ctx, e);
+		}
 	}
 
 	@Override
@@ -301,58 +333,62 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 
 	private Future<?> handleIncrementAndDecrement(ChannelHandlerContext ctx, BinaryMemcacheRequest request, boolean increment) {
-		MemcacheUtils.logRequest(request);
-		ByteBuf extras = request.extras();
-		long delta = extras.getLong(0);
-		long expiration = extras.getUnsignedInt(16);
-		long currentTimeInSeconds = System.currentTimeMillis() / 1000;
-		long initialValue = extras.slice(8, 8).readLong();
-		if (expiration == MAX_EXPIRATION) {
-			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT,
-					"Expiration is MAX Value.  Not allowed according to spec for some reason.").send(ctx);
-		}
-		if (expiration <= MAX_EXPIRATION_SEC) {
-			expirationInSeconds = expiration;
-		} else if (expiration > currentTimeInSeconds) {
-			expirationInSeconds = expiration - currentTimeInSeconds;
-		} else {
-			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED, "Expiration is in the past.").send(ctx);
-		}
-		IExecutorService executor = getExecutor();
-
-		ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastIncDecCallable(authMsgHandler.getCacheName(), key, expirationInSeconds, increment, delta, expiration, initialValue), key);
-		
-		ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
-			@Override
-			public void onResponse(HazelcastMemcacheMessage msg) {
-				if(!msg.isSuccess()) {
-					MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
-					return;
-				}
-				if (opcode == BinaryMemcacheOpcodes.INCREMENT || opcode == BinaryMemcacheOpcodes.DECREMENT) {
-					FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null, msg.getValue().getValue());
-					response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-					response.setOpcode(opcode);
-					response.setCas(msg.getValue().getCAS());
-					response.setOpaque(opaque);
-					response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
-					MemcacheUtils.writeAndFlush(ctx, response);
-				} else {
-					MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
-				}
+		try {
+			MemcacheUtils.logRequest(request);
+			ByteBuf extras = request.extras();
+			long delta = extras.getLong(0);
+			long expiration = extras.getUnsignedInt(16);
+			long currentTimeInSeconds = System.currentTimeMillis() / 1000;
+			long initialValue = extras.slice(8, 8).readLong();
+			if (expiration == MAX_EXPIRATION) {
+				return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT,
+						"Expiration is MAX Value.  Not allowed according to spec for some reason.").send(ctx);
 			}
-
-			public void onFailure(Throwable t) {
-				if(t instanceof CancellationException) {
-					//Task Was cancelled.  Ignoring this exception.
-					return;
-				}
-				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
-				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
+			if (expiration <= MAX_EXPIRATION_SEC) {
+				expirationInSeconds = expiration;
+			} else if (expiration > currentTimeInSeconds) {
+				expirationInSeconds = expiration - currentTimeInSeconds;
+			} else {
+				return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED, "Expiration is in the past.").send(ctx);
 			}
-		};
-		executeOrAddCallback(future, callback);
-		return future;
+			IExecutorService executor = getExecutor();
+	
+			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastIncDecCallable(authMsgHandler.getCacheName(), key, expirationInSeconds, increment, delta, expiration, initialValue), key);
+			
+			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
+				@Override
+				public void onResponse(HazelcastMemcacheMessage msg) {
+					if(!msg.isSuccess()) {
+						MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+						return;
+					}
+					if (opcode == BinaryMemcacheOpcodes.INCREMENT || opcode == BinaryMemcacheOpcodes.DECREMENT) {
+						FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null, msg.getValue().getValue());
+						response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+						response.setOpcode(opcode);
+						response.setCas(msg.getValue().getCAS());
+						response.setOpaque(opaque);
+						response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
+						MemcacheUtils.writeAndFlush(ctx, response);
+					} else {
+						MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
+					}
+				}
+	
+				public void onFailure(Throwable t) {
+					if(t instanceof CancellationException) {
+						//Task Was cancelled.  Ignoring this exception.
+						return;
+					}
+					LOGGER.error("Error invoking "+opcode+" asyncronously", t);
+					handleException(ctx, t);
+				}
+			};
+			executeOrAddCallback(future, callback);
+			return future;
+		} catch(Exception e) {
+			return handleException(ctx, e);
+		}
 	}
 
 	@Override
@@ -376,12 +412,16 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> flush(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-		getCache().evictAll();
-		if (request.opcode() == BinaryMemcacheOpcodes.FLUSH) {
-			return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+		try {
+			MemcacheUtils.logRequest(request);
+			getCache().evictAll();
+			if (request.opcode() == BinaryMemcacheOpcodes.FLUSH) {
+				return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+			}
+			return MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
+		} catch(Exception e) {
+			return handleException(ctx, e);
 		}
-		return MemcacheUtils.returnQuiet(request.opcode(),  request.opaque()).send(ctx);
 	}
 
 	@Override
@@ -393,7 +433,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	@Override
 	public Future<?> version(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
-		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, "CF Memcache 1.0").send(ctx);
+		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, "CF Memcache 2.0").send(ctx);
 	}
 
 	private Future<?> appendPrepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
@@ -409,40 +449,44 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 
 	private Future<?> appendPrepend(ChannelHandlerContext ctx, MemcacheContent content, boolean append) {
-		cacheValue.writeValue(content.content());
-		if (content instanceof LastMemcacheContent) {
-			IExecutorService executor = getExecutor();
-
-			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastAppendPrependCallable(authMsgHandler.getCacheName(), key, cacheValue, append), key);
-			
-			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
-				@Override
-				public void onResponse(HazelcastMemcacheMessage msg) {
-					if(!msg.isSuccess()) {
-						MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+		try {
+			cacheValue.writeValue(content.content());
+			if (content instanceof LastMemcacheContent) {
+				IExecutorService executor = getExecutor();
+	
+				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastAppendPrependCallable(authMsgHandler.getCacheName(), key, cacheValue, append), key);
+				
+				ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
+					@Override
+					public void onResponse(HazelcastMemcacheMessage msg) {
+						if(!msg.isSuccess()) {
+							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+						}
+						if (opcode == BinaryMemcacheOpcodes.APPEND || opcode == BinaryMemcacheOpcodes.PREPEND) {
+							MemcacheUtils.returnSuccess(opcode, opaque, msg.getCas(), null).send(ctx);
+						} else {
+							MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
+						}
 					}
-					if (opcode == BinaryMemcacheOpcodes.APPEND || opcode == BinaryMemcacheOpcodes.PREPEND) {
-						MemcacheUtils.returnSuccess(opcode, opaque, msg.getCas(), null).send(ctx);
-					} else {
-						MemcacheUtils.returnQuiet(opcode,  opaque).send(ctx);
+	
+					public void onFailure(Throwable t) {
+						if(t instanceof CancellationException) {
+							//Task Was cancelled.  Ignoring this exception.
+							return;
+						}
+						LOGGER.error("Error invoking Opcode "+opcode+" asyncronously", t);
+						handleException(ctx, t);
 					}
-				}
-
-				public void onFailure(Throwable t) {
-					if(t instanceof CancellationException) {
-						//Task Was cancelled.  Ignoring this exception.
-						return;
-					}
-					LOGGER.error("Error invoking Opcode "+opcode+" asyncronously", t);
-					MemcacheUtils.returnFailure(opcode, opaque, (short) 0x0084, t.getMessage()).send(ctx);
-				}
-			};
-			//null out so it can get GCed while waiting for a response.
-			cacheValue = null;
-			executeOrAddCallback(future, callback);
-			return future;
+				};
+				//null out so it can get GCed while waiting for a response.
+				cacheValue = null;
+				executeOrAddCallback(future, callback);
+				return future;
+			}
+			return null;
+		} catch(Exception e) {
+			return handleException(ctx, e);
 		}
-		return null;
 	}
 
 	@Override
@@ -567,15 +611,19 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> stat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-		if (key != null) {
-			sendStat(ctx, opaque, key, STATS.get(key).getStat(this));
-		} else {
-			for (Map.Entry<byte[], Stat> stat : STATS.entrySet()) {
-				sendStat(ctx, opaque, stat.getKey(), stat.getValue().getStat(this));
+		try {
+			MemcacheUtils.logRequest(request);
+			if (key != null) {
+				sendStat(ctx, opaque, key, STATS.get(key).getStat(this));
+			} else {
+				for (Map.Entry<byte[], Stat> stat : STATS.entrySet()) {
+					sendStat(ctx, opaque, stat.getKey(), stat.getValue().getStat(this));
+				}
 			}
+			return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+		} catch(Exception e) {
+			return handleException(ctx, e);
 		}
-		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
 	}
 
 	private void sendStat(ChannelHandlerContext ctx, int opaque, byte[] key, String value) {
@@ -593,94 +641,102 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> touch(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-		long expiration = request.extras().readUnsignedInt();
-
-		IExecutorService executor = getExecutor();
-
-		ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastTouchCallable(authMsgHandler.getCacheName(), key, expiration), key);
-		ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
-			@Override
-			public void onResponse(HazelcastMemcacheMessage msg) {
-				if (!msg.isSuccess()) {
-					MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
-					return;
+		try {
+			MemcacheUtils.logRequest(request);
+			long expiration = request.extras().readUnsignedInt();
+	
+			IExecutorService executor = getExecutor();
+	
+			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastTouchCallable(authMsgHandler.getCacheName(), key, expiration), key);
+			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
+				@Override
+				public void onResponse(HazelcastMemcacheMessage msg) {
+					if (!msg.isSuccess()) {
+						MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+						return;
+					}
+					MemcacheUtils.returnSuccess(opcode, opaque, 0, null).send(ctx);
 				}
-				MemcacheUtils.returnSuccess(opcode, opaque, 0, null).send(ctx);
-			}
-
-			public void onFailure(Throwable t) {
-				if(t instanceof CancellationException) {
-					//Task Was cancelled.  Ignoring this exception.
-					return;
+	
+				public void onFailure(Throwable t) {
+					if(t instanceof CancellationException) {
+						//Task Was cancelled.  Ignoring this exception.
+						return;
+					}
+					LOGGER.error("Error invoking "+opcode+" asyncronously", t);
+					handleException(ctx, t);
 				}
-				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
-				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
-			}
-		};
-		executeOrAddCallback(future, callback);
-		return future;
+			};
+			executeOrAddCallback(future, callback);
+			return future;
+		} catch(Exception e) {
+			return handleException(ctx, e);
+		}
 	}
 
 	@Override
 	public Future<?> gat(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-
-		long expiration = request.extras().readUnsignedInt();
-
-		IExecutorService executor = getExecutor();
-		ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastGATCallable(authMsgHandler.getCacheName(), key, expiration), key);
-		ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
-			@Override
-			public void onResponse(HazelcastMemcacheMessage msg) {
-				if (!msg.isSuccess()) {
-					if (msg.getCode() == BinaryMemcacheResponseStatus.KEY_ENOENT && (opcode == BinaryMemcacheOpcodes.GATQ
-							|| opcode == BinaryMemcacheOpcodes.GATKQ)) {
-						MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+		try {
+			MemcacheUtils.logRequest(request);
+	
+			long expiration = request.extras().readUnsignedInt();
+	
+			IExecutorService executor = getExecutor();
+			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastGATCallable(authMsgHandler.getCacheName(), key, expiration), key);
+			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
+				@Override
+				public void onResponse(HazelcastMemcacheMessage msg) {
+					if (!msg.isSuccess()) {
+						if (msg.getCode() == BinaryMemcacheResponseStatus.KEY_ENOENT && (opcode == BinaryMemcacheOpcodes.GATQ
+								|| opcode == BinaryMemcacheOpcodes.GATKQ)) {
+							MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+						} else {
+							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+						}
+						return;
+					}
+					HazelcastMemcacheCacheValue value = msg.getValue();
+					ByteBuf responseValue = value.getValue();
+					ByteBuf responseFlags = value.getFlags();
+					
+					if(value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
+						long incDecValue = value.getValue().readLong();
+						try {
+							responseValue = Unpooled.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes("UTF-8"));
+							responseFlags = Unpooled.wrappedBuffer(new byte[4]);
+						} catch (UnsupportedEncodingException e) {
+							throw new RuntimeException(e);
+						}
+					}
+	
+					FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags, responseValue);
+					response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+					response.setOpcode(opcode);
+					response.setCas(msg.getValue().getCAS());
+					response.setOpaque(opaque);
+					if (opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ) {
+						ByteBuf responseKey = Unpooled.wrappedBuffer(key);
+						response.setKey(responseKey);
+						response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity() + key.length);
 					} else {
-						MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+						response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity());
 					}
-					return;
+					MemcacheUtils.writeAndFlush(ctx, response);
 				}
-				HazelcastMemcacheCacheValue value = msg.getValue();
-				ByteBuf responseValue = value.getValue();
-				ByteBuf responseFlags = value.getFlags();
-				
-				if(value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
-					long incDecValue = value.getValue().readLong();
-					try {
-						responseValue = Unpooled.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes("UTF-8"));
-						responseFlags = Unpooled.wrappedBuffer(new byte[4]);
-					} catch (UnsupportedEncodingException e) {
-						throw new RuntimeException(e);
+	
+				public void onFailure(Throwable t) {
+					if(t instanceof CancellationException) {
+						//Task Was cancelled.  Ignoring this exception.
+						return;
 					}
+					LOGGER.error("Error invoking "+opcode+" asyncronously", t);
+					handleException(ctx, t);
 				}
-
-				FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags, responseValue);
-				response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-				response.setOpcode(opcode);
-				response.setCas(msg.getValue().getCAS());
-				response.setOpaque(opaque);
-				if (opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ) {
-					ByteBuf responseKey = Unpooled.wrappedBuffer(key);
-					response.setKey(responseKey);
-					response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity() + key.length);
-				} else {
-					response.setTotalBodyLength(responseFlags.capacity()+responseValue.capacity());
-				}
-				MemcacheUtils.writeAndFlush(ctx, response);
-			}
-
-			public void onFailure(Throwable t) {
-				if(t instanceof CancellationException) {
-					//Task Was cancelled.  Ignoring this exception.
-					return;
-				}
-				LOGGER.error("Error invoking "+opcode+" asyncronously", t);
-				MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
-			}
-		};
-		executeOrAddCallback(future, callback);
-		return future;
+			};
+			executeOrAddCallback(future, callback);
+			return future;
+		} catch(Exception e) {
+			return handleException(ctx, e);
+		}
 	}
 }

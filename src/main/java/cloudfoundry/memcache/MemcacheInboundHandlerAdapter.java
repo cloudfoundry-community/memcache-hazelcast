@@ -37,10 +37,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	private final AuthMsgHandler authMsgHandler;
 	private final Deque<DelayedMessage> msgOrderQueue;
 	DelayedMessage delayedMessage;
+	MemcacheServer memcacheServer;
 	
 	private int maxQueueSize;
 
-	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int maxQueueSize) {
+	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int maxQueueSize, MemcacheServer memcacheServer) {
 		super();
 		this.msgHandlerFactory = msgHandlerFactory;
 		this.authMsgHandler = authMsgHandler;
@@ -315,6 +316,14 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				LOGGER.info("Failed to handle request with optcode: "+optcode);
 				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(optcode)).send(ctx);
 			}
+		} catch(IllegalStateException e) {
+			LOGGER.error("IllegalStateException thrown.  Shutting down the server because we don't know the state we're in.", e);
+			try {
+				msgHandlerFactory.shutdown();
+			} catch(Throwable t) { }
+			try {
+				memcacheServer.shutdown();
+			} catch(Throwable t) { }
 		} catch(Throwable e) {
 			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.", e);
 			ctx.channel().close();
