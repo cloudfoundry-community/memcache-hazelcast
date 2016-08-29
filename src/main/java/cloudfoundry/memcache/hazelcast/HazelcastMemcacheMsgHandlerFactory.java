@@ -56,7 +56,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	private static final String MEMCACHE_QUORUM_RULE = "memcacheQuorumRule";
 	public static final String EXECUTOR_INSTANCE_NAME = "memcache";
 
-	private final HazelcastInstance instance;
+	private HazelcastInstance instance;
 	private ScheduledExecutorService executor;
 	private volatile boolean shuttingDown = false;
 
@@ -220,8 +220,19 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		
 		config.setExecutorConfigs(Collections.singletonMap(EXECUTOR_INSTANCE_NAME, executorConfig));
 
-		instance = Hazelcast.newHazelcastInstance(config);
-		instance.getReplicatedMap(Stat.STAT_MAP).putIfAbsent(Stat.UPTIME_KEY, System.currentTimeMillis());
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					instance = Hazelcast.newHazelcastInstance(config);
+					LOGGER.info("Hazelcast Started.");
+					instance.getReplicatedMap(Stat.STAT_MAP).putIfAbsent(Stat.UPTIME_KEY, System.currentTimeMillis());
+				} catch(Throwable t) {
+					LOGGER.error("Error attempting to start Hazelcast.  Shutting Down.", t);
+					System.exit(1);
+				}
+			}
+		}).start();
 	}
 	
 	private class ShutdownListener implements LifecycleListener {
@@ -281,7 +292,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 			return "NotRunning";
 		}
 		if(instance.getCluster().getClusterState() != ClusterState.ACTIVE) {
-			return "ClusterNotActive";
+			return "ClusterNotActive: "+instance.getCluster().getClusterState();
 		}
 		if(!instance.getPartitionService().isClusterSafe()) {
 			return "ClusterNotSafe";
