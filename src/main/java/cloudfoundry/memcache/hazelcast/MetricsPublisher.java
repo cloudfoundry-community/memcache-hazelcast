@@ -40,37 +40,42 @@ public class MetricsPublisher {
 		Map<String, Number> varz = new HashMap<>();
 		MemoryStats memoryStats = new DefaultMemoryStats();
 		
-		metronClient.emitValueMetric("hazelcast_total_physical_memory", memoryStats.getTotalPhysical(), "bytes");
-		metronClient.emitValueMetric("hazelcast_free_physical_memory", memoryStats.getFreePhysical(), "bytes");
-		metronClient.emitValueMetric("hazelcast_used_physical_memory", memoryStats.getTotalPhysical()-memoryStats.getFreePhysical(), "bytes");
-		metronClient.emitValueMetric("hazelcast_gc_collection_time_minor", memoryStats.getGCStats().getMinorCollectionTime(), "ms");
-		metronClient.emitValueMetric("hazelcast_gc_collection_time_major", memoryStats.getGCStats().getMajorCollectionTime(), "ms");
+		metronClient.emitValueMetric("hazelcast.total_physical_memory", memoryStats.getTotalPhysical(), "bytes");
+		metronClient.emitValueMetric("hazelcast.free_physical_memory", memoryStats.getFreePhysical(), "bytes");
+		metronClient.emitValueMetric("hazelcast.used_physical_memory", memoryStats.getTotalPhysical()-memoryStats.getFreePhysical(), "bytes");
+		metronClient.emitValueMetric("hazelcast.gc_collection_time_minor", memoryStats.getGCStats().getMinorCollectionTime(), "ms");
+		metronClient.emitValueMetric("hazelcast.gc_collection_time_major", memoryStats.getGCStats().getMajorCollectionTime(), "ms");
 		AggregateStats stats = buildAggregateStats();
 		
-		metronClient.emitValueMetric("hazelcast_cache_used", stats.getHeapCost(), "bytes");
-		metronClient.emitValueMetric("hazelcast_cache_free", maxSize-stats.getHeapCost(), "bytes");
-		metronClient.emitValueMetric("hazelcast_cache_max", maxSize, "bytes");
-		metronClient.emitValueMetric("hazelcast_total_caches", stats.getTotalCaches(), "count");
-		metronClient.emitValueMetric("hazelcast_backup_entry", stats.getBackupEntryCount(), "count");
-		metronClient.emitValueMetric("hazelcast_backup_entry_memory_cost", stats.getBackupEntryMemoryCost(), "bytes");
-		metronClient.emitValueMetric("hazelcast_event_operation", stats.getEventOperationCount(), "count");
-		metronClient.emitValueMetric("hazelcast_get_operation", stats.getGetOperationCount(), "count");
-		metronClient.emitValueMetric("hazelcast_hits", stats.getHits(), "count");
-		metronClient.emitValueMetric("hazelcast_locked_entry", stats.getLockedEntryCount(), "count");
-		metronClient.emitValueMetric("hazelcast_max_get_latency", stats.getMaxGetLatency(), "ms");
-		metronClient.emitValueMetric("hazelcast_max_put_latency", stats.getMaxPutLatency(), "ms");
-		metronClient.emitValueMetric("hazelcast_max_remove_latency", stats.getMaxRemoveLatency(), "ms");
-		metronClient.emitValueMetric("hazelcast_other_operation", stats.getOtherOperationCount(), "count");
-		metronClient.emitValueMetric("hazelcast_owned_entry", stats.getOwnedEntryCount(), "count");
-		metronClient.emitValueMetric("hazelcast_owned_entry_memory_cost", stats.getOwnedEntryMemoryCost(), "bytes");
-		metronClient.emitValueMetric("hazelcast_put_operation", stats.getPutOperationCount(), "count");
-		metronClient.emitValueMetric("hazelcast_remove_operation", stats.getRemoveOperationCount(), "count");
-		metronClient.emitValueMetric("hazelcast_total_get_latency", stats.getTotalGetLatency(), "ms");
-		metronClient.emitValueMetric("hazelcast_total_put_latency", stats.getTotalPutLatency(), "ms");
-		metronClient.emitValueMetric("hazelcast_total_remove_latency", stats.getTotalRemoveLatency(), "ms");
-		metronClient.emitValueMetric("hazelcast_total", stats.total(), "count");
-		metronClient.emitValueMetric("hazelcast_committed_memory_cost", stats.getCommittedMemoryCost(), "bytes");
-		metronClient.emitValueMetric("hazelcast_max_operations", stats.getMaxOperationsCount(), "count");
+		metronClient.emitValueMetric("hazelcast.cache_used", stats.getHeapCost(), "bytes");
+		metronClient.emitValueMetric("hazelcast.cache_free", maxSize-stats.getHeapCost(), "bytes");
+		metronClient.emitValueMetric("hazelcast.cache_max", maxSize, "bytes");
+		metronClient.emitValueMetric("hazelcast.total_caches", stats.getTotalCaches(), "count");
+		metronClient.emitValueMetric("hazelcast.backup_entry", stats.getBackupEntryCount(), "count");
+		metronClient.emitValueMetric("hazelcast.backup_entry_memory_cost", stats.getBackupEntryMemoryCost(), "bytes");
+		metronClient.emitValueMetric("hazelcast.event_operation", stats.getEventOperationCount(), "count");
+		metronClient.emitValueMetric("hazelcast.get_operation", stats.getGetOperationCount(), "count");
+		metronClient.emitValueMetric("hazelcast.hits", stats.getHits(), "count");
+		metronClient.emitValueMetric("hazelcast.locked_entry", stats.getLockedEntryCount(), "count");
+		metronClient.emitValueMetric("hazelcast.max_get_latency", stats.getMaxGetLatency(), "ms");
+		metronClient.emitValueMetric("hazelcast.max_put_latency", stats.getMaxPutLatency(), "ms");
+		metronClient.emitValueMetric("hazelcast.max_remove_latency", stats.getMaxRemoveLatency(), "ms");
+		metronClient.emitValueMetric("hazelcast.other_operation", stats.getOtherOperationCount(), "count");
+		metronClient.emitValueMetric("hazelcast.owned_entry", stats.getOwnedEntryCount(), "count");
+		metronClient.emitValueMetric("hazelcast.owned_entry_memory_cost", stats.getOwnedEntryMemoryCost(), "bytes");
+		metronClient.emitValueMetric("hazelcast.put_operation", stats.getPutOperationCount(), "count");
+		metronClient.emitValueMetric("hazelcast.remove_operation", stats.getRemoveOperationCount(), "count");
+		metronClient.emitValueMetric("hazelcast.total_get_latency", stats.getTotalGetLatency(), "ms");
+		metronClient.emitValueMetric("hazelcast.total_put_latency", stats.getTotalPutLatency(), "ms");
+		metronClient.emitValueMetric("hazelcast.total_remove_latency", stats.getTotalRemoveLatency(), "ms");
+		metronClient.emitValueMetric("hazelcast.total", stats.total(), "count");
+		metronClient.emitValueMetric("hazelcast.committed_memory_cost", stats.getCommittedMemoryCost(), "bytes");
+		metronClient.emitValueMetric("hazelcast.max_operations", stats.getMaxOperationsCount(), "count");
+		try {
+			metronClient.emitValueMetric("hazelcast.uptime", System.currentTimeMillis()-((Long)hazelcastMsgFactory.getInstance().getReplicatedMap(Stat.STAT_MAP).get(Stat.UPTIME_KEY)).longValue(), "ms");
+		} catch(Exception e) {
+			metronClient.emitValueMetric("hazelcast.uptime", 0, "ms");
+		}
 	}
 	
 	private AggregateStats buildAggregateStats() {
