@@ -11,7 +11,11 @@ public class MemcacheRequestKey {
 	public MemcacheRequestKey(BinaryMemcacheMessage message) {
 		this.opcode = message.opcode();
 		this.opaque = message.opaque();
-		this.key = key == null ? null : Unpooled.copiedBuffer(message.key());
+		if(message.key() == null) {
+			this.key = null;
+		} else {
+			this.key = Unpooled.copiedBuffer(message.key());
+		}
 	}
 	
 	public byte getOpcode() {

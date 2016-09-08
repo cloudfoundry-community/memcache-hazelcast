@@ -137,6 +137,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		config.setProperty("hazelcast.max.join.seconds", "30");
 		config.setProperty("hazelcast.max.no.master.confirmation.seconds", "60");
 		config.setProperty("hazelcast.member.list.publish.interval.seconds", "90");
+		config.setProperty("hazelcast.map.invalidation.batch.enabled", "false");
 		config.addListenerConfig(new ListenerConfig(new ShutdownListener()));
 		QuorumConfig quorumConfig = null;
 		if(appConfig.getHazelcast().getMinimumClusterMembers() != null && appConfig.getHazelcast().getMinimumClusterMembers() > 1) {
