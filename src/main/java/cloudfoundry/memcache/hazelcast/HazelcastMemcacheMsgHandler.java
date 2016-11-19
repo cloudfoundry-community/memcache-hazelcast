@@ -1,16 +1,5 @@
 package cloudfoundry.memcache.hazelcast;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.handler.codec.memcache.LastMemcacheContent;
-import io.netty.handler.codec.memcache.MemcacheContent;
-import io.netty.handler.codec.memcache.binary.BinaryMemcacheOpcodes;
-import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
-import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
-import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
-import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
-
 import java.io.UnsupportedEncodingException;
 import java.lang.management.ManagementFactory;
 import java.util.LinkedHashMap;
@@ -21,12 +10,6 @@ import java.util.concurrent.Future;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import cloudfoundry.memcache.AuthMsgHandler;
-import cloudfoundry.memcache.CompletedFuture;
-import cloudfoundry.memcache.MemcacheMsgHandler;
-import cloudfoundry.memcache.MemcacheServer;
-import cloudfoundry.memcache.MemcacheUtils;
 
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.ExecutionCallback;
@@ -39,6 +22,22 @@ import com.hazelcast.core.IExecutorService;
 import com.hazelcast.core.IMap;
 import com.hazelcast.monitor.LocalMapStats;
 
+import cloudfoundry.memcache.AuthMsgHandler;
+import cloudfoundry.memcache.CompletedFuture;
+import cloudfoundry.memcache.MemcacheMsgHandler;
+import cloudfoundry.memcache.MemcacheUtils;
+import cloudfoundry.memcache.ResponseSender;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.handler.codec.memcache.LastMemcacheContent;
+import io.netty.handler.codec.memcache.MemcacheContent;
+import io.netty.handler.codec.memcache.binary.BinaryMemcacheOpcodes;
+import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
+import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
+import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
+import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
+
 
 public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	
@@ -47,6 +46,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	final HazelcastInstance instance;
 	HazelcastMemcacheCacheValue cacheValue;
 	final AuthMsgHandler authMsgHandler;
+	ResponseSender failureResponse;
 	public static final int MAX_EXPIRATION_SEC = 60 * 60 * 24 * 30;
 	public static final long MAX_EXPIRATION = 0xFFFFFFFF;
 	final byte opcode;
@@ -206,7 +206,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
 		if (valueSize > MAX_VALUE_SIZE) {
-			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE).send(ctx);
+			failureResponse = MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE);
 		}
 		ByteBuf extras = request.extras();
 		ByteBuf flagSlice = extras.slice(0, 4);
@@ -218,7 +218,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		} else if (expiration > currentTimeInSeconds) {
 			expirationInSeconds = expiration - currentTimeInSeconds;
 		} else {
-			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED, "Expiration is in the past.").send(ctx);
+			failureResponse = MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED, "Expiration is in the past.");
 		}
 		return null;
 	}
@@ -230,8 +230,14 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	private Future<?> processSetAddReplaceContent(ChannelHandlerContext ctx, MemcacheContent content, byte nonQuietOpcode) {
 		try {
-			cacheValue.writeValue(content.content());
+			if(failureResponse == null) {
+				cacheValue.writeValue(content.content());
+			}
 			if (content instanceof LastMemcacheContent) {
+				if(failureResponse != null) {
+					cacheValue = null;
+					return failureResponse.send(ctx);
+				}
 				IExecutorService executor = getExecutor();
 				
 				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastSetCallable(authMsgHandler.getCacheName(), nonQuietOpcode, key, cas, cacheValue, expirationInSeconds), key);
@@ -442,7 +448,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
 
 		if (valueSize > MAX_VALUE_SIZE) {
-			return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE).send(ctx);
+			failureResponse = MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE);
 		}
 		cacheValue = new HazelcastMemcacheCacheValue(valueSize, Unpooled.EMPTY_BUFFER, 0);
 		return null;
@@ -450,8 +456,14 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	private Future<?> appendPrepend(ChannelHandlerContext ctx, MemcacheContent content, boolean append) {
 		try {
-			cacheValue.writeValue(content.content());
+			if(failureResponse == null) {
+				cacheValue.writeValue(content.content());
+			}
 			if (content instanceof LastMemcacheContent) {
+				if(failureResponse != null) {
+					cacheValue = null;
+					return failureResponse.send(ctx);
+				}
 				IExecutorService executor = getExecutor();
 	
 				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastAppendPrependCallable(authMsgHandler.getCacheName(), key, cacheValue, append), key);

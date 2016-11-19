@@ -1,5 +1,7 @@
 package cloudfoundry.memcache.hazelcast;
 
+import static org.junit.Assert.assertEquals;
+
 import java.net.ServerSocket;
 import java.net.SocketAddress;
 import java.util.Collections;
@@ -14,6 +16,7 @@ import net.spy.memcached.auth.AuthDescriptor;
 import net.spy.memcached.auth.PlainCallbackHandler;
 import net.spy.memcached.internal.OperationCompletionListener;
 import net.spy.memcached.internal.OperationFuture;
+import net.spy.memcached.ops.StatusCode;
 import net.spy.memcached.transcoders.SerializingTranscoder;
 
 import org.testng.Assert;
@@ -60,9 +63,6 @@ public class HazelcastMemcacheSpyTest {
 		binaryConnectionFactory.setShouldOptimize(false);
 		binaryConnectionFactory.setAuthWaitTime(10000000);
 		binaryConnectionFactory.setOpTimeout(10000000);
-		SerializingTranscoder t = new SerializingTranscoder();
-		t.setCompressionThreshold(Integer.MAX_VALUE);
-		binaryConnectionFactory.setTranscoder(t);
 
 		 c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:"+localPort));
 	}
@@ -108,8 +108,10 @@ public class HazelcastMemcacheSpyTest {
 		byte[] data = new byte[20004857];
 		new Random().nextBytes(data);
 		try {
-			if(c.set("BigValue", 0, data).get()) {
-				Assert.fail();
+			OperationFuture<Boolean> setResult = c.set("BigValue", 0, data);
+			if(setResult.get()) {
+				System.out.print("We got a response!");
+				assertEquals(StatusCode.ERR_2BIG, setResult.getStatus().getStatusCode());
 			}
 		} catch(Exception e) {
 			//success

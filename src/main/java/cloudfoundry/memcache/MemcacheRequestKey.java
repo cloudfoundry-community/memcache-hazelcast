@@ -3,6 +3,7 @@ package cloudfoundry.memcache;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheMessage;
+import io.netty.util.CharsetUtil;
 
 public class MemcacheRequestKey {
 	private final byte opcode;
@@ -58,6 +59,6 @@ public class MemcacheRequestKey {
 
 	@Override
 	public String toString() {
-		return "MemcacheRequestKey [opcode=" + opcode + ", opaque=" + opaque + ", key=" + key + "]";
+		return "MemcacheRequestKey [opcode=" + opcode + ", opaque=" + opaque + ", key=" + (key == null ? "null" : key.toString(CharsetUtil.UTF_8)) + "]";
 	}
 }
