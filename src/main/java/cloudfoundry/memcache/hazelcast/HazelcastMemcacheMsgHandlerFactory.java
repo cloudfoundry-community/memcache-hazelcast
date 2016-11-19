@@ -1,7 +1,5 @@
 package cloudfoundry.memcache.hazelcast;
 
-import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -14,11 +12,6 @@ import javax.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import cloudfoundry.memcache.AuthMsgHandler;
-import cloudfoundry.memcache.MemcacheMsgHandler;
-import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
-import cloudfoundry.memcache.MemcacheServer;
-
 import com.hazelcast.cluster.ClusterState;
 import com.hazelcast.config.Config;
 import com.hazelcast.config.EvictionPolicy;
@@ -27,29 +20,33 @@ import com.hazelcast.config.JoinConfig;
 import com.hazelcast.config.ListenerConfig;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.config.MaxSizeConfig;
+import com.hazelcast.config.MaxSizeConfig.MaxSizePolicy;
 import com.hazelcast.config.MemberGroupConfig;
 import com.hazelcast.config.MulticastConfig;
 import com.hazelcast.config.NearCacheConfig;
+import com.hazelcast.config.NearCacheConfig.LocalUpdatePolicy;
 import com.hazelcast.config.NetworkConfig;
 import com.hazelcast.config.PartitionGroupConfig;
+import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
 import com.hazelcast.config.QuorumConfig;
 import com.hazelcast.config.QuorumListenerConfig;
 import com.hazelcast.config.ReplicatedMapConfig;
 import com.hazelcast.config.SerializerConfig;
 import com.hazelcast.config.TcpIpConfig;
-import com.hazelcast.config.MaxSizeConfig.MaxSizePolicy;
-import com.hazelcast.config.NearCacheConfig.LocalUpdatePolicy;
-import com.hazelcast.config.PartitionGroupConfig.MemberGroupType;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
 import com.hazelcast.core.LifecycleEvent;
-import com.hazelcast.core.LifecycleListener;
-import com.hazelcast.core.PartitionService;
 import com.hazelcast.core.LifecycleEvent.LifecycleState;
-import com.hazelcast.quorum.Quorum;
+import com.hazelcast.core.LifecycleListener;
 import com.hazelcast.quorum.QuorumEvent;
 import com.hazelcast.quorum.QuorumListener;
+
+import cloudfoundry.memcache.AuthMsgHandler;
+import cloudfoundry.memcache.MemcacheMsgHandler;
+import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
+import cloudfoundry.memcache.MemcacheServer;
+import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 
 public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFactory {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastMemcacheMsgHandlerFactory.class);

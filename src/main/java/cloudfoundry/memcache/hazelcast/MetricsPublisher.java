@@ -37,7 +37,6 @@ public class MetricsPublisher {
 
 	@Scheduled(fixedRateString="${hazelcast.metricsPublishInterval}", initialDelayString="${hazelcast.metricsPublishInterval}")
 	public void publishMetrics() {
-		Map<String, Number> varz = new HashMap<>();
 		MemoryStats memoryStats = new DefaultMemoryStats();
 		
 		metronClient.emitValueMetric("hazelcast.total_physical_memory", memoryStats.getTotalPhysical(), "bytes");

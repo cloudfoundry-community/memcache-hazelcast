@@ -1,5 +1,11 @@
 package cloudfoundry.memcache;
 
+import java.io.UnsupportedEncodingException;
+import java.util.Arrays;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
@@ -9,14 +15,6 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
-
-import java.io.UnsupportedEncodingException;
-import java.util.Arrays;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class MemcacheUtils {
 	

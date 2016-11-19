@@ -240,7 +240,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				}
 				IExecutorService executor = getExecutor();
 				
-				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastSetCallable(authMsgHandler.getCacheName(), nonQuietOpcode, key, cas, cacheValue, expirationInSeconds), key);
+				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture<HazelcastMemcacheMessage>)executor.submitToKeyOwner(new HazelcastSetCallable(authMsgHandler.getCacheName(), nonQuietOpcode, key, cas, cacheValue, expirationInSeconds), key);
 				ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 					@Override
 					public void onResponse(HazelcastMemcacheMessage response) {
@@ -301,7 +301,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			MemcacheUtils.logRequest(request);
 			IExecutorService executor = getExecutor();
 	
-			ICompletableFuture<Boolean> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastDeleteCallable(authMsgHandler.getCacheName(), key), key);
+			ICompletableFuture<Boolean> future = (ICompletableFuture<Boolean>)executor.submitToKeyOwner(new HazelcastDeleteCallable(authMsgHandler.getCacheName(), key), key);
 			
 			ExecutionCallback<Boolean> callback = new ExecutionCallback<Boolean>() {
 				@Override
@@ -359,7 +359,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			}
 			IExecutorService executor = getExecutor();
 	
-			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastIncDecCallable(authMsgHandler.getCacheName(), key, expirationInSeconds, increment, delta, expiration, initialValue), key);
+			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture<HazelcastMemcacheMessage>)executor.submitToKeyOwner(new HazelcastIncDecCallable(authMsgHandler.getCacheName(), key, expirationInSeconds, increment, delta, expiration, initialValue), key);
 			
 			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 				@Override
@@ -466,7 +466,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				}
 				IExecutorService executor = getExecutor();
 	
-				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastAppendPrependCallable(authMsgHandler.getCacheName(), key, cacheValue, append), key);
+				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture<HazelcastMemcacheMessage>)executor.submitToKeyOwner(new HazelcastAppendPrependCallable(authMsgHandler.getCacheName(), key, cacheValue, append), key);
 				
 				ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 					@Override
@@ -659,7 +659,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	
 			IExecutorService executor = getExecutor();
 	
-			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastTouchCallable(authMsgHandler.getCacheName(), key, expiration), key);
+			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture<HazelcastMemcacheMessage>)executor.submitToKeyOwner(new HazelcastTouchCallable(authMsgHandler.getCacheName(), key, expiration), key);
 			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 				@Override
 				public void onResponse(HazelcastMemcacheMessage msg) {
@@ -694,7 +694,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			long expiration = request.extras().readUnsignedInt();
 	
 			IExecutorService executor = getExecutor();
-			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture)executor.submitToKeyOwner(new HazelcastGATCallable(authMsgHandler.getCacheName(), key, expiration), key);
+			ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture<HazelcastMemcacheMessage>)executor.submitToKeyOwner(new HazelcastGATCallable(authMsgHandler.getCacheName(), key, expiration), key);
 			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 				@Override
 				public void onResponse(HazelcastMemcacheMessage msg) {
