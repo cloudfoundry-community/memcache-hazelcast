@@ -60,7 +60,7 @@ public class HazelcastMemcacheSpyTest {
 		ConnectionFactoryBuilder binaryConnectionFactory = new ConnectionFactoryBuilder();
 		binaryConnectionFactory.setProtocol(Protocol.BINARY);
 		binaryConnectionFactory.setAuthDescriptor(new AuthDescriptor(null, new PlainCallbackHandler("test", "test")));
-		binaryConnectionFactory.setShouldOptimize(false);
+		binaryConnectionFactory.setShouldOptimize(true);
 		binaryConnectionFactory.setAuthWaitTime(10000000);
 		binaryConnectionFactory.setOpTimeout(10000000);
 
