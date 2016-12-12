@@ -19,7 +19,7 @@ import com.hazelcast.monitor.NearCacheStats;
 import cf.dropsonde.metron.MetronClient;
 
 @Component
-public class MetricsPublisher {
+public class HazelcastMetricsPublisher {
 
 	private final HazelcastMemcacheMsgHandlerFactory hazelcastMsgFactory;
 	private final long maxSize;
@@ -27,7 +27,7 @@ public class MetricsPublisher {
 	private volatile Map<String, Long> previousOperationsCounts;
 
 	@Autowired
-	public MetricsPublisher(HazelcastMemcacheMsgHandlerFactory hazelcastMsgFactory, MetronClient metronClient, MemcacheHazelcastConfig config) {
+	public HazelcastMetricsPublisher(HazelcastMemcacheMsgHandlerFactory hazelcastMsgFactory, MetronClient metronClient, MemcacheHazelcastConfig config) {
 		super();
 		this.hazelcastMsgFactory = hazelcastMsgFactory;
 		this.maxSize = config.getHazelcast().getMaxCacheSize();

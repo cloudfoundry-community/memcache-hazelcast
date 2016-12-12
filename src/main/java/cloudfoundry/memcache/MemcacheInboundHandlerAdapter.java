@@ -31,20 +31,22 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 	private final MemcacheMsgHandlerFactory msgHandlerFactory;
 
-	private byte optcode = -1;
+	private byte opcode = -1;
 	private MemcacheMsgHandler currentMsgHandler;
 	private final AuthMsgHandler authMsgHandler;
 	private final Deque<DelayedMessage> msgOrderQueue;
+	private final MemcacheStats memcacheStats;
 	DelayedMessage delayedMessage;
 	MemcacheServer memcacheServer;
 	
 	private int maxQueueSize;
 
-	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int maxQueueSize, MemcacheServer memcacheServer) {
+	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int maxQueueSize, MemcacheServer memcacheServer, MemcacheStats memcacheStats) {
 		super();
 		this.msgHandlerFactory = msgHandlerFactory;
 		this.authMsgHandler = authMsgHandler;
 		this.maxQueueSize = maxQueueSize;
+		this.memcacheStats = memcacheStats;
 		msgOrderQueue = new ArrayDeque<>(maxQueueSize+20);
 	}
 
@@ -89,13 +91,14 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				delayedMessage = new DelayedMessage(new MemcacheRequestKey((BinaryMemcacheRequest) msg));
 				msgOrderQueue.offer(delayedMessage);
 
-				optcode = request.opcode();
+				opcode = request.opcode();
 				if(currentMsgHandler == null) {
 					if(getAuthMsgHandler().isAuthenticated()) {
 						currentMsgHandler = msgHandlerFactory.createMsgHandler(request, getAuthMsgHandler());
 					} else {
 						currentMsgHandler = new NoAuthMemcacheMsgHandler(request);
 					}
+					memcacheStats.logHit(opcode);
 				}
 			} else if(currentMsgHandler == null) {
 				return;
@@ -103,7 +106,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			
 			BinaryMemcacheRequest request = null;
 
-			switch (optcode) {
+			switch (opcode) {
 			case BinaryMemcacheOpcodes.GET:
 			case BinaryMemcacheOpcodes.GETQ:
 			{
@@ -312,8 +315,8 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "We don't support any auth mechanisms that require a step.").send(ctx);
 				break;
 			default:
-				LOGGER.info("Failed to handle request with optcode: "+optcode);
-				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(optcode)).send(ctx);
+				LOGGER.info("Failed to handle request with optcode: "+opcode);
+				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(opcode)).send(ctx);
 			}
 		} catch(IllegalStateException e) {
 			LOGGER.error("IllegalStateException thrown.  Shutting down the server because we don't know the state we're in.", e);
@@ -366,7 +369,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	private void completeRequest(Future<?> task) {
 		delayedMessage.setTask(task);
 		currentMsgHandler = null;
-		optcode = -1;
+		opcode = -1;
 		delayedMessage = null;
 	}
 

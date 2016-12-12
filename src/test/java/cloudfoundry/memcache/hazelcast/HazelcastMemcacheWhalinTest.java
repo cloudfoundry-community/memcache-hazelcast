@@ -10,6 +10,7 @@ import org.testng.annotations.Test;
 
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
@@ -35,7 +36,7 @@ public class HazelcastMemcacheWhalinTest {
 		}
 		System.out.println("Localport: "+localPort);
 
-		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100);
+		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, new MemcacheStats());
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);

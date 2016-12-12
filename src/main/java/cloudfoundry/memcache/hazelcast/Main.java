@@ -11,6 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import cf.dropsonde.spring.boot.EnableMetronClient;
 import cloudfoundry.memcache.AuthMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.web.HttpBasicAuthenticator;
 
@@ -39,9 +40,9 @@ public class Main {
 
 	@Bean
 	MemcacheServer memcacheServer(AuthMsgHandlerFactory authFactory,
-			MemcacheHazelcastConfig config) {
+			MemcacheHazelcastConfig config, MemcacheStats memcacheStats) {
 		MemcacheServer server = new MemcacheServer(config.getMemcache().getPort(), authFactory,
-				config.getMemcache().getMaxQueueSize());
+				config.getMemcache().getMaxQueueSize(), memcacheStats);
 		return server;
 	}
 

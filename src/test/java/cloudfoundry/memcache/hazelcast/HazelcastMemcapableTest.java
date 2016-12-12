@@ -12,6 +12,7 @@ import com.hazelcast.config.Config;
 
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 
 public class HazelcastMemcapableTest {
@@ -29,7 +30,7 @@ public class HazelcastMemcapableTest {
 		}
 
 		System.out.println("Localport: " + localPort);
-		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 1000);
+		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 1000, new MemcacheStats());
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
