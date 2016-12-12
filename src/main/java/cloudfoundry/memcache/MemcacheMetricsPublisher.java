@@ -26,8 +26,8 @@ public class MemcacheMetricsPublisher {
 	public void publishMetrics() {
 		long totalHits = 0;
 		for(Map.Entry<String, Long> hit : memcacheStats.getHitStats().entrySet()) {
-			totalHits += hit.getValue();
 			if(hit.getValue() > 0) {
+				totalHits += hit.getValue();
 				metronClient.emitValueMetric("memcache.hits."+hit.getKey(), hit.getValue(), "count");
 			}
 		}
