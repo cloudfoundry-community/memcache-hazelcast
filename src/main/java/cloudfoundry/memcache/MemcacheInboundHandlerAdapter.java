@@ -72,6 +72,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					LOGGER.info("Applying some back presure to client "+getAuthMsgHandler().getUsername()+" because queuesize is: "+msgOrderQueue.size());
 					try {
 						for(DelayedMessage delayedMessage : msgOrderQueue) {
+							if(System.currentTimeMillis()-delayedMessage.getCreated() > 300000) {
+								LOGGER.warn("Message at bottom of queue has been in the queue longer than 5 mintues.  Terminating the connection.");
+								ctx.channel().close();
+								return;
+							}
 							try {
 								if(delayedMessage.sync()) {
 									break;
@@ -84,6 +89,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					} catch (Exception e) {
 						LOGGER.error("Unexpected failure applying back presure.  Closing the connection.", e);
 						ctx.channel().close();
+						return;
 					}
 				}
 
@@ -426,6 +432,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		final MemcacheRequestKey requestKey;
 		Deque<DelayedResponse> responses = new ArrayDeque<>();
 		Future<?> task = null;
+		long created = System.currentTimeMillis();
 
 		public DelayedMessage(MemcacheRequestKey requestKey) {
 			this.requestKey = requestKey;
@@ -437,6 +444,10 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		
 		public void setTask(Future<?> task) {
 			this.task = task;
+		}
+		
+		public long getCreated() {
+			return created;
 		}
 
 		@Override
