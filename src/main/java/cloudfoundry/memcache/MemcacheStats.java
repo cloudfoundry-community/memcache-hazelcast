@@ -3,7 +3,7 @@ package cloudfoundry.memcache;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Component;
 
@@ -11,27 +11,27 @@ import org.springframework.stereotype.Component;
 public class MemcacheStats {
 	
 	public MemcacheStats() {
-		Map<Byte, LongAdder> mutableOpcodeHits = new HashMap<>();
+		Map<Byte, AtomicLong> mutableOpcodeHits = new HashMap<>();
 		for(MemcacheOpcodes memcacheOpcodes : MemcacheOpcodes.values()) {
-			mutableOpcodeHits.put(memcacheOpcodes.opcode(), new LongAdder());
+			mutableOpcodeHits.put(memcacheOpcodes.opcode(), new AtomicLong());
 		}
 		opcodeHits = Collections.unmodifiableMap(mutableOpcodeHits);
 	}
 
-	private final Map<Byte, LongAdder> opcodeHits;
+	private final Map<Byte, AtomicLong> opcodeHits;
 	
 	public void logHit(Byte opcode) {
-		LongAdder value = opcodeHits.get(opcode);
+		AtomicLong value = opcodeHits.get(opcode);
 		if(value == null) {
 			value = opcodeHits.get(MemcacheOpcodes.UNKNOWN.opcode);
 		}
-		value.increment();
+		value.incrementAndGet();
 	}
 	
-	public Map<String, Long> getHitStats() {
-		Map<String, Long> hitStats = new HashMap<>();
+	public Map<String, AtomicLong> getHitStats() {
+		Map<String, AtomicLong> hitStats = new HashMap<>();
 		for(MemcacheOpcodes memcacheOpcode : MemcacheOpcodes.values()) {
-			hitStats.put(memcacheOpcode.name().toLowerCase(), opcodeHits.get(memcacheOpcode.opcode()).longValue());
+			hitStats.put(memcacheOpcode.name().toLowerCase(), opcodeHits.get(memcacheOpcode.opcode()));
 		}
 		return hitStats;
 	}
