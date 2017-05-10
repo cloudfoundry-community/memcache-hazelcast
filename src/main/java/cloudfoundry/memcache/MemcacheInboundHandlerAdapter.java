@@ -1,6 +1,5 @@
 package cloudfoundry.memcache;
 
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.ExecutionException;
@@ -9,7 +8,6 @@ import java.util.concurrent.Future;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -20,7 +18,6 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheMessage;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheOpcodes;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
-import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.GenericFutureListener;
@@ -66,8 +63,10 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			if (!(msg instanceof MemcacheObject)) {
 				return;
 			}
+			BinaryMemcacheRequest request = null;
 			if (msg instanceof BinaryMemcacheRequest) {
-				//Apply back presure
+				request = (BinaryMemcacheRequest) msg;
+				//Apply back pressure
 				if(msgOrderQueue.size() > maxQueueSize) {
 					LOGGER.info("Applying some back presure to client "+getAuthMsgHandler().getUsername()+" because queuesize is: "+msgOrderQueue.size());
 					try {
@@ -93,8 +92,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					}
 				}
 
-				BinaryMemcacheRequest request = (BinaryMemcacheRequest) msg;
-				delayedMessage = new DelayedMessage(new MemcacheRequestKey((BinaryMemcacheRequest) msg));
+				delayedMessage = new DelayedMessage(new MemcacheRequestKey(request));
 				msgOrderQueue.offer(delayedMessage);
 
 				opcode = request.opcode();
@@ -110,13 +108,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				return;
 			}
 			
-			BinaryMemcacheRequest request = null;
-
 			switch (opcode) {
 			case BinaryMemcacheOpcodes.GET:
 			case BinaryMemcacheOpcodes.GETQ:
 			{
-				Future<?> task = currentMsgHandler.get(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.get(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -125,7 +121,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			case BinaryMemcacheOpcodes.GETK:
 			case BinaryMemcacheOpcodes.GETKQ:
 			{
-				Future<?> task = currentMsgHandler.getK(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.getK(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -136,7 +132,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			{
 				Future<?> task;
 				if(msg instanceof BinaryMemcacheRequest) {
-					task = currentMsgHandler.set(ctx, (BinaryMemcacheRequest)msg);
+					task = currentMsgHandler.set(ctx, request);
 				} else {
 					task = currentMsgHandler.set(ctx, (MemcacheContent)msg);
 				}
@@ -150,7 +146,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			{
 				Future<?> task;
 				if(msg instanceof BinaryMemcacheRequest) {
-					task = currentMsgHandler.add(ctx, (BinaryMemcacheRequest)msg);
+					task = currentMsgHandler.add(ctx, request);
 				} else {
 					task = currentMsgHandler.add(ctx, (MemcacheContent)msg);
 				}
@@ -164,7 +160,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			{
 				Future<?> task;
 				if(msg instanceof BinaryMemcacheRequest) {
-					task = currentMsgHandler.replace(ctx, (BinaryMemcacheRequest)msg);
+					task = currentMsgHandler.replace(ctx, request);
 				} else {
 					task = currentMsgHandler.replace(ctx, (MemcacheContent)msg);
 				}
@@ -176,7 +172,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			case BinaryMemcacheOpcodes.DELETE:
 			case BinaryMemcacheOpcodes.DELETEQ:
 			{
-				Future<?> task = currentMsgHandler.delete(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.delete(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -185,7 +181,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			case BinaryMemcacheOpcodes.INCREMENT:
 			case BinaryMemcacheOpcodes.INCREMENTQ:
 			{
-				Future<?> task = currentMsgHandler.increment(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.increment(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -194,7 +190,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			case BinaryMemcacheOpcodes.DECREMENT:
 			case BinaryMemcacheOpcodes.DECREMENTQ:
 			{
-				Future<?> task = currentMsgHandler.decrement(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.decrement(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -203,7 +199,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			case BinaryMemcacheOpcodes.QUIT:
 			case BinaryMemcacheOpcodes.QUITQ:
 			{
-				Future<?> task = currentMsgHandler.quit(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.quit(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -212,7 +208,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			case BinaryMemcacheOpcodes.FLUSH:
 			case BinaryMemcacheOpcodes.FLUSHQ:
 			{
-				Future<?> task = currentMsgHandler.flush(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.flush(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -220,7 +216,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 			case BinaryMemcacheOpcodes.NOOP:
 			{
-				Future<?> task = currentMsgHandler.noop(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.noop(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -228,7 +224,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 			case BinaryMemcacheOpcodes.VERSION:
 			{
-				Future<?> task = currentMsgHandler.version(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.version(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -239,7 +235,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			{
 				Future<?> task;
 				if(msg instanceof BinaryMemcacheRequest) {
-					task = currentMsgHandler.append(ctx, (BinaryMemcacheRequest)msg);
+					task = currentMsgHandler.append(ctx, request);
 				} else {
 					task = currentMsgHandler.append(ctx, (MemcacheContent)msg);
 				}
@@ -253,7 +249,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			{
 				Future<?> task;
 				if(msg instanceof BinaryMemcacheRequest) {
-					task = currentMsgHandler.prepend(ctx, (BinaryMemcacheRequest)msg);
+					task = currentMsgHandler.prepend(ctx, request);
 				} else {
 					task = currentMsgHandler.prepend(ctx, (MemcacheContent)msg);
 				}
@@ -264,7 +260,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 			case BinaryMemcacheOpcodes.STAT:
 			{
-				Future<?> task = currentMsgHandler.stat(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.stat(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -272,7 +268,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 			case BinaryMemcacheOpcodes.TOUCH:
 			{
-				Future<?> task = currentMsgHandler.touch(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.touch(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -281,7 +277,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			case BinaryMemcacheOpcodes.GAT:
 			case BinaryMemcacheOpcodes.GATQ:
 			{
-				Future<?> task = currentMsgHandler.gat(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.gat(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -290,7 +286,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			case BinaryMemcacheOpcodes.GATK:
 			case BinaryMemcacheOpcodes.GATKQ:
 			{
-				Future<?> task = currentMsgHandler.gat(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = currentMsgHandler.gat(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -298,7 +294,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 			case BinaryMemcacheOpcodes.SASL_LIST_MECHS:
 			{
-				Future<?> task = getAuthMsgHandler().listMechs(ctx, (BinaryMemcacheRequest)msg);
+				Future<?> task = getAuthMsgHandler().listMechs(ctx, request);
 				if(task != null) {
 					completeRequest(task);
 				}
@@ -308,7 +304,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			{
 				Future<?> task;
 				if(msg instanceof BinaryMemcacheRequest) {
-					task = getAuthMsgHandler().startAuth(ctx, (BinaryMemcacheRequest)msg);
+					task = getAuthMsgHandler().startAuth(ctx, request);
 				} else {
 					task = getAuthMsgHandler().startAuth(ctx, (MemcacheContent)msg);
 				}
@@ -318,11 +314,21 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				break;
 			}
 			case BinaryMemcacheOpcodes.SASL_STEP:
-				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "We don't support any auth mechanisms that require a step.").send(ctx);
+				if(msg instanceof BinaryMemcacheRequest) {
+					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "We don't support any auth mechanisms that require a step.").send(ctx);
+				} else {
+					LOGGER.error("Recieved Non memcache request with SASL_STEP optcode.  This is an invalid state. Closing connection.");
+					ctx.channel().close();
+				}
 				break;
 			default:
 				LOGGER.info("Failed to handle request with optcode: "+opcode);
-				MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(opcode)).send(ctx);
+				if(msg instanceof BinaryMemcacheRequest) {
+					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(opcode)).send(ctx);
+				} else {
+					LOGGER.error("Recieved unsupported opcode as a non request.  This is an invalid state. Closing connection.");
+					ctx.channel().close();
+				}
 			}
 		} catch(IllegalStateException e) {
 			LOGGER.error("IllegalStateException thrown.  Shutting down the server because we don't know the state we're in.", e);
@@ -401,29 +407,6 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	private void clearDelayedMessages() {
 		for (DelayedMessage delayedMsg : msgOrderQueue) {
 			delayedMsg.clear();
-		}
-	}
-
-	public void queueMessage(ChannelHandlerContext ctx, Object msg) throws Exception {
-		if (msg instanceof BinaryMemcacheRequest) {
-			BinaryMemcacheRequest request = (BinaryMemcacheRequest)msg;
-			DelayedMessage delayedMessage = new DelayedMessage(new MemcacheRequestKey((BinaryMemcacheRequest) msg));
-			msgOrderQueue.offer(delayedMessage);
-			if(msgOrderQueue.size() >= maxQueueSize) {
-				FullBinaryMemcacheResponse response;
-				try {
-					response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer("Your request queue was full so this request was not processed.".getBytes("US-ASCII")));
-				} catch (UnsupportedEncodingException e) {
-					throw new RuntimeException(e);
-				}
-				response.setStatus(BinaryMemcacheResponseStatus.ENOMEM);
-				response.setOpaque(request.opaque());
-				response.setOpcode(request.opcode());
-				write(ctx, response, ctx.newPromise());
-
-				ReferenceCountUtil.release(msg);
-				return;
-			}
 		}
 	}
 
