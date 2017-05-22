@@ -295,7 +295,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				if(msg instanceof BinaryMemcacheRequest) {
 					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "We don't support any auth mechanisms that require a step.").send(ctx);
 				} else {
-					LOGGER.error("Recieved Non memcache request with SASL_STEP optcode.  This is an invalid state. Closing connection.");
+					LOGGER.error("Received Non memcache request with SASL_STEP optcode.  This is an invalid state. Closing connection.");
 					ctx.close();
 				}
 				break;
@@ -304,7 +304,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				if(msg instanceof BinaryMemcacheRequest) {
 					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(opcode)).send(ctx);
 				} else {
-					LOGGER.error("Recieved unsupported opcode as a non request.  This is an invalid state. Closing connection.");
+					LOGGER.error("Received unsupported opcode as a non request.  This is an invalid state. Closing connection.");
 					ctx.close();
 				}
 			}
