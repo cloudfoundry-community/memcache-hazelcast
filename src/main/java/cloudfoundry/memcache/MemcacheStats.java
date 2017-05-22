@@ -3,12 +3,37 @@ package cloudfoundry.memcache;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 import org.springframework.stereotype.Component;
 
 @Component
 public class MemcacheStats {
+	
+	public static class UserLoad {
+		private LongAdder requests;
+		private volatile long loadTimestamp;
+
+		public UserLoad() {
+			requests = new LongAdder();
+			loadTimestamp = System.currentTimeMillis();
+		}
+		
+		private long checkOverload() {
+			requests.increment();
+			long loadTimeDiff = System.currentTimeMillis() - loadTimestamp;
+			if(loadTimeDiff > 60000) {
+				long count = requests.longValue();
+				requests.reset();
+				loadTimestamp = System.currentTimeMillis();
+				return count;
+			}
+			return 0;
+		}
+
+	}
 	
 	public MemcacheStats() {
 		Map<Byte, AtomicLong> mutableOpcodeHits = new HashMap<>();
@@ -16,9 +41,23 @@ public class MemcacheStats {
 			mutableOpcodeHits.put(memcacheOpcodes.opcode(), new AtomicLong());
 		}
 		opcodeHits = Collections.unmodifiableMap(mutableOpcodeHits);
+		userLoad = new ConcurrentHashMap<String, MemcacheStats.UserLoad>();
 	}
 
 	private final Map<Byte, AtomicLong> opcodeHits;
+	private final Map<String, UserLoad> userLoad;
+	
+	public long checkOverload(String username) {
+		UserLoad load = userLoad.get(username);
+		if(load == null) {
+			UserLoad newLoad = new UserLoad();
+			load = userLoad.putIfAbsent(username, newLoad);
+			if(load == null) {
+				load = newLoad;
+			}
+		}
+		return load.checkOverload();
+	}
 	
 	public void logHit(Byte opcode) {
 		AtomicLong value = opcodeHits.get(opcode);

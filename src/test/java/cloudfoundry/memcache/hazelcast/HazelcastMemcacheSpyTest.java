@@ -4,7 +4,9 @@ import static org.junit.Assert.assertEquals;
 
 import java.net.ServerSocket;
 import java.net.SocketAddress;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
@@ -14,6 +16,7 @@ import net.spy.memcached.ConnectionFactoryBuilder.Protocol;
 import net.spy.memcached.MemcachedClient;
 import net.spy.memcached.auth.AuthDescriptor;
 import net.spy.memcached.auth.PlainCallbackHandler;
+import net.spy.memcached.internal.GetFuture;
 import net.spy.memcached.internal.OperationCompletionListener;
 import net.spy.memcached.internal.OperationFuture;
 import net.spy.memcached.ops.StatusCode;
@@ -87,7 +90,34 @@ public class HazelcastMemcacheSpyTest {
 		c.set("someKey", 0, "Some Data Set!").get();
 		Assert.assertEquals(c.get("someKey"), "Some Data Set!");
 	}
-	
+
+/*	@Test
+	public void backpressuretest() throws Exception {
+		c.set("someKey", 0, "Some Data Set!").get();
+		List<GetFuture<Object>> futures = new ArrayList<>();
+		for(int loop = 0; loop < 1000; loop++) {
+			System.out.println("loop index: "+loop);
+			futures.add(c.asyncGet("someKey"+loop));
+		}
+		
+		for(GetFuture<Object> future : futures) {
+			future.get();
+			System.out.println("Got response");
+		}
+		Thread.sleep(60000);
+		futures = new ArrayList<>();
+		for(int loop = 0; loop < 10; loop++) {
+			System.out.println("loop index: "+loop);
+			futures.add(c.asyncGet("someKey"+loop));
+		}
+		
+		for(GetFuture<Object> future : futures) {
+			future.get();
+			System.out.println("Got response");
+		}
+		Assert.assertEquals(c.get("someKey"), "Some Data Set!");
+	}*/
+
 	@Test
 	public void setWithExpiration() throws Exception {
 		c.set("someKey", 1, "Some Data!").get();

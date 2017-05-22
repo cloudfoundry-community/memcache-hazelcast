@@ -2,7 +2,6 @@ package cloudfoundry.memcache;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 import org.slf4j.Logger;
@@ -33,6 +32,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	private final AuthMsgHandler authMsgHandler;
 	private final Deque<DelayedMessage> msgOrderQueue;
 	private final MemcacheStats memcacheStats;
+	private long lastLoggedQueueSize;
 	DelayedMessage delayedMessage;
 	MemcacheServer memcacheServer;
 	
@@ -55,8 +55,9 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				clearDelayedMessages();
 			}
 		});
+		readIfQueueSmallEnough(ctx);
 	}
-
+	
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
 		try {
@@ -65,36 +66,13 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 			BinaryMemcacheRequest request = null;
 			if (msg instanceof BinaryMemcacheRequest) {
-				request = (BinaryMemcacheRequest) msg;
-				//Apply back pressure
-				if(msgOrderQueue.size() > maxQueueSize) {
-					LOGGER.info("Applying some back presure to client "+getAuthMsgHandler().getUsername()+" because queuesize is: "+msgOrderQueue.size());
-					try {
-						for(DelayedMessage delayedMessage : msgOrderQueue) {
-							if(System.currentTimeMillis()-delayedMessage.getCreated() > 300000) {
-								LOGGER.warn("Message at bottom of queue has been in the queue longer than 5 mintues.  Terminating the connection.");
-								ctx.channel().close();
-								return;
-							}
-							try {
-								if(delayedMessage.sync()) {
-									break;
-								}
-							} catch(InterruptedException e) {
-								LOGGER.info("Attempt to apply backpresure halted by recieving Interrupt.");
-								break;
-							}
-						}
-					} catch (Exception e) {
-						LOGGER.error("Unexpected failure applying back presure.  Closing the connection.", e);
-						ctx.channel().close();
-						return;
-					}
+				long load = memcacheStats.checkOverload(getCurrentUser());
+				if(load > 1000000) {
+					LOGGER.warn("User overloading memcache. User="+getCurrentUser()+" Requests="+load+"/min");
 				}
-
+				request = (BinaryMemcacheRequest) msg;
 				delayedMessage = new DelayedMessage(new MemcacheRequestKey(request));
 				msgOrderQueue.offer(delayedMessage);
-
 				opcode = request.opcode();
 				if(currentMsgHandler == null) {
 					if(getAuthMsgHandler().isAuthenticated()) {
@@ -318,7 +296,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "We don't support any auth mechanisms that require a step.").send(ctx);
 				} else {
 					LOGGER.error("Recieved Non memcache request with SASL_STEP optcode.  This is an invalid state. Closing connection.");
-					ctx.channel().close();
+					ctx.close();
 				}
 				break;
 			default:
@@ -327,7 +305,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(opcode)).send(ctx);
 				} else {
 					LOGGER.error("Recieved unsupported opcode as a non request.  This is an invalid state. Closing connection.");
-					ctx.channel().close();
+					ctx.close();
 				}
 			}
 		} catch(IllegalStateException e) {
@@ -339,8 +317,8 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				memcacheServer.shutdown();
 			} catch(Throwable t) { }
 		} catch(Throwable e) {
-			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.", e);
-			ctx.channel().close();
+			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.  Current User: "+getCurrentUser(), e);
+			ctx.close();
 		} finally {
 			ReferenceCountUtil.release(msg);
 		}
@@ -354,7 +332,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		BinaryMemcacheMessage memcacheMessage = (BinaryMemcacheMessage) msg;
 		MemcacheRequestKey key = new MemcacheRequestKey(memcacheMessage);
 		if (msgOrderQueue.isEmpty()) {
-			LOGGER.warn("We got a memcache message but the queue was empty.  Discarding.");
+			LOGGER.warn("We got a memcache message but the queue was empty.  Discarding.  User="+getCurrentUser());
 			return;
 		}
 		delayMsg(key, memcacheMessage, promise);
@@ -372,6 +350,36 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 		}
 		ctx.flush();
+		if(!msgOrderQueue.isEmpty() && System.currentTimeMillis()-msgOrderQueue.peek().getCreated() > 300000) {
+			LOGGER.warn("Message at bottom of queue has been in the queue longer than 5 mintues.  Terminating the connection.  User="+getCurrentUser());
+			ctx.close();
+			return;
+		}
+		readIfQueueSmallEnough(ctx);
+	}
+
+	@Override
+	public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
+		readIfQueueSmallEnough(ctx);
+		super.channelReadComplete(ctx);
+	}
+
+	private void readIfQueueSmallEnough(ChannelHandlerContext ctx) {
+		if(msgOrderQueue.size() < maxQueueSize) {
+			ctx.read();
+		} else {
+			if(lastLoggedQueueSize+10000 < System.currentTimeMillis()) {
+				lastLoggedQueueSize = System.currentTimeMillis();
+				LOGGER.warn("Max queue size hit.  Applying back pressure. User="+getCurrentUser()+" QueueSize="+msgOrderQueue.size());
+			}
+		}
+	}
+
+	private String getCurrentUser() {
+		if(getAuthMsgHandler() == null || getAuthMsgHandler().getUsername() == null) {
+			return "NotYetAuthenticatedUser";
+		}
+		return getAuthMsgHandler().getUsername();
 	}
 
 	private AuthMsgHandler getAuthMsgHandler() {
@@ -387,8 +395,12 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-		LOGGER.error("Unexpected Error.", cause);
-		ctx.channel().close();
+		if(cause.getMessage().contains("Connection reset")) {
+			LOGGER.info("Channel for "+getCurrentUser()+" Unexpectedly reset.");
+		} else {
+			LOGGER.error("Unexpected Error for user: "+getCurrentUser(), cause);
+		}
+		ctx.close();
 	}
 
 	private void delayMsg(MemcacheRequestKey key, BinaryMemcacheMessage memcacheMessage, ChannelPromise promise) {
@@ -443,20 +455,12 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			return requestKey.equals(obj);
 		}
 		
-		public boolean sync() throws InterruptedException, ExecutionException {
-			if(task == null || task.isDone() || task.isCancelled()) {
-				return false;
-			}
-			task.get();
-			return task.isDone();
-		}
-		
 		private void clear() {
 			if(task != null) {
 				try {
 					task.cancel(true);
 				} catch (Exception e) {
-					LOGGER.warn("Unexpected Error cancelling task for "+requestKey+": " + e.getMessage());
+					LOGGER.warn("Unexpected Error cancelling task key '"+requestKey+"': " + e.getMessage());
 				}
 			}
 			while (!this.responses.isEmpty()) {

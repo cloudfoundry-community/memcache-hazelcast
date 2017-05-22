@@ -46,7 +46,8 @@ public class MemcacheServer {
 					}
 				})
 				.childOption(ChannelOption.TCP_NODELAY, true)
-				.childOption(ChannelOption.SO_KEEPALIVE, true);
+				.childOption(ChannelOption.SO_KEEPALIVE, true)
+				.childOption(ChannelOption.AUTO_READ, false);
 
 		try {
 			b.bind(port).sync();
