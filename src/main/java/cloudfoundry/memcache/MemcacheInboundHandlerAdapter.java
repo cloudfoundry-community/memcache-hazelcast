@@ -350,8 +350,8 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 		}
 		ctx.flush();
-		if(!msgOrderQueue.isEmpty() && System.currentTimeMillis()-msgOrderQueue.peek().getCreated() > 300000) {
-			LOGGER.warn("Message at bottom of queue has been in the queue longer than 5 mintues.  Terminating the connection.  User="+getCurrentUser());
+		if(!msgOrderQueue.isEmpty() && System.currentTimeMillis()-msgOrderQueue.peek().getCreated() > 60000) {
+			LOGGER.warn("Message at bottom of queue has been in the queue longer than 1 mintue.  Terminating the connection.  User="+getCurrentUser());
 			ctx.close();
 			return;
 		}
