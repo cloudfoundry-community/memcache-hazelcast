@@ -3,6 +3,7 @@ package cloudfoundry.memcache;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -302,7 +303,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "We don't support any auth mechanisms that require a step.").send(ctx);
 				} else {
 					LOGGER.error("Received Non memcache request with SASL_STEP optcode.  This is an invalid state. Closing connection.");
-					ctx.close();
+					try {
+						ctx.close().get(1, TimeUnit.SECONDS);
+					} catch(Exception e) {
+						LOGGER.debug("Failure closing connection. ", e);
+					}
 				}
 				break;
 			default:
@@ -311,7 +316,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(opcode)).send(ctx);
 				} else {
 					LOGGER.error("Received unsupported opcode as a non request.  This is an invalid state. Closing connection.");
-					ctx.close();
+					try {
+						ctx.close().get(1, TimeUnit.SECONDS);
+					} catch(Exception e) {
+						LOGGER.debug("Failure closing connection. ", e);
+					}
 				}
 			}
 		} catch(IllegalStateException e) {
@@ -324,7 +333,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			} catch(Throwable t) { }
 		} catch(Throwable e) {
 			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.  Current User: "+getCurrentUser(), e);
-			ctx.close();
+			try {
+				ctx.close().get(1, TimeUnit.SECONDS);
+			} catch(Exception e2) {
+				LOGGER.debug("Failure closing connection. ", e2);
+			}
 		} finally {
 			ReferenceCountUtil.release(msg);
 		}
@@ -358,7 +371,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		ctx.flush();
 		if(!msgOrderQueue.isEmpty() && System.currentTimeMillis()-msgOrderQueue.peek().getCreated() > 60000) {
 			LOGGER.warn("Message at bottom of queue has been in the queue longer than 1 mintue.  Terminating the connection.  User="+getCurrentUser());
-			ctx.close();
+			try {
+				ctx.close().get(1, TimeUnit.SECONDS);
+			} catch(Exception e) {
+				LOGGER.debug("Failure closing connection. ", e);
+			}
 			return;
 		}
 		readIfQueueSmallEnough(ctx);
@@ -401,12 +418,16 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-		if(cause.getMessage().contains("Connection reset")) {
+		if(cause != null && cause.getMessage() != null && cause.getMessage().contains("Connection reset")) {
 			LOGGER.info("Channel for "+getCurrentUser()+" Unexpectedly reset.");
 		} else {
 			LOGGER.error("Unexpected Error for user: "+getCurrentUser(), cause);
 		}
-		ctx.close();
+		try {
+			ctx.close().get(1, TimeUnit.SECONDS);
+		} catch(Exception e) {
+			LOGGER.debug("Failure closing connection. ", e);
+		}
 	}
 
 	private void delayMsg(MemcacheRequestKey key, BinaryMemcacheMessage memcacheMessage, ChannelPromise promise) {
@@ -479,7 +500,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				try {
 					delayedMessage.promise.cancel(true);
 				} catch (Exception e) {
-					LOGGER.warn("Unexpected Error failing promise for "+requestKey+": " + e.getMessage());
+					LOGGER.warn("Unexpected Error cancelling promise for "+requestKey+": " + e.getMessage());
 				}
 			}
 		}

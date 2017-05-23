@@ -17,24 +17,23 @@ public class MemcacheStats {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheStats.class);
 	
 	public static class UserLoad {
-		private LongAdder requests;
+		private AtomicLong requests;
 		private volatile long loadTimestamp;
 
 		public UserLoad() {
-			requests = new LongAdder();
+			requests = new AtomicLong();
 			loadTimestamp = System.currentTimeMillis();
 		}
 		
 		private long checkOverload() {
-			requests.increment();
+			requests.incrementAndGet();
 			long loadTimeDiff = System.currentTimeMillis() - loadTimestamp;
 			if(loadTimeDiff > 60000) {
-				long count = requests.longValue();
+				loadTimestamp = System.currentTimeMillis();
+				long count = requests.getAndSet(0);
 				if(LOGGER.isDebugEnabled()) {
 					LOGGER.debug("Resetting Load Counter.  Last Value: "+count);
 				}
-				requests.reset();
-				loadTimestamp = System.currentTimeMillis();
 				return count;
 			}
 			return 0;
