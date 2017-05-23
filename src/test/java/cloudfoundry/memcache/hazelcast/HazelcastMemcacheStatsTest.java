@@ -50,7 +50,7 @@ public class HazelcastMemcacheStatsTest {
 
 		System.out.println("Localport: "+localPort);
 		memcacheStats = new MemcacheStats();
-		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, memcacheStats);
+		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, memcacheStats);
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));

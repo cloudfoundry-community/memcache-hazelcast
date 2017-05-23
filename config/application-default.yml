@@ -11,6 +11,7 @@ server:
 memcache:
   port: 54913
   secretKey: secret
+  loadWarningSize: 1000000
   maxQueueSize: 1000
   testUser: test
   testPassword: test

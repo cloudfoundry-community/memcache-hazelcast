@@ -35,14 +35,16 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	private long lastLoggedQueueSize;
 	DelayedMessage delayedMessage;
 	MemcacheServer memcacheServer;
+	private final int loadWarningSize;
 	
 	private int maxQueueSize;
 
-	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int maxQueueSize, MemcacheServer memcacheServer, MemcacheStats memcacheStats) {
+	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int maxQueueSize, int loadWarningSize, MemcacheServer memcacheServer, MemcacheStats memcacheStats) {
 		super();
 		this.msgHandlerFactory = msgHandlerFactory;
 		this.authMsgHandler = authMsgHandler;
 		this.maxQueueSize = maxQueueSize;
+		this.loadWarningSize = loadWarningSize;
 		this.memcacheStats = memcacheStats;
 		msgOrderQueue = new ArrayDeque<>(maxQueueSize+20);
 	}
@@ -67,7 +69,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			BinaryMemcacheRequest request = null;
 			if (msg instanceof BinaryMemcacheRequest) {
 				long load = memcacheStats.checkOverload(getCurrentUser());
-				if(load > 1000000) {
+				if(load > loadWarningSize) {
 					LOGGER.warn("User overloading memcache. User="+getCurrentUser()+" Requests="+load+"/min");
 				}
 				request = (BinaryMemcacheRequest) msg;

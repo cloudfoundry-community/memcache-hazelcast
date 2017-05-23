@@ -30,7 +30,7 @@ public class HazelcastMemcapableTest {
 		}
 
 		System.out.println("Localport: " + localPort);
-		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 1000, new MemcacheStats());
+		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 1000, 1000, new MemcacheStats());
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
