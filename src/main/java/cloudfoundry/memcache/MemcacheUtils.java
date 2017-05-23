@@ -69,7 +69,7 @@ public class MemcacheUtils {
 	
 	public static void writeAndFlush(ChannelHandlerContext ctx, BinaryMemcacheMessage msg) {
 		if(ctx.channel().isOpen() && ctx.channel().isActive()) {
-			ChannelFuture future = ctx.channel().writeAndFlush(msg.retain());
+			ChannelFuture future = ctx.writeAndFlush(msg.retain());
 			future.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 		} else {
 			LOGGER.warn("Failed to send message because channel was not open and active.");
