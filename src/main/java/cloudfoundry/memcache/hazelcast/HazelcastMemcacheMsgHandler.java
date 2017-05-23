@@ -409,8 +409,8 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
 		}
 		try {
-			ctx.close().sync();
-		} catch (Exception e) {
+			ctx.channel().close().await();
+		} catch (InterruptedException e) {
 			throw new RuntimeException(e);
 		}
 		return CompletedFuture.INSTANCE;

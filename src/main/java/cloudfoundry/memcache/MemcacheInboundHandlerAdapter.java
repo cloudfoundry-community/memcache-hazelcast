@@ -304,7 +304,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				} else {
 					LOGGER.error("Received Non memcache request with SASL_STEP optcode.  This is an invalid state. Closing connection.");
 					try {
-						ctx.close().await(1, TimeUnit.SECONDS);
+						ctx.channel().close().await(1, TimeUnit.SECONDS);
 					} catch(Exception e) {
 						LOGGER.debug("Failure closing connection. ", e);
 					}
@@ -317,7 +317,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				} else {
 					LOGGER.error("Received unsupported opcode as a non request.  This is an invalid state. Closing connection.");
 					try {
-						ctx.close().await(1, TimeUnit.SECONDS);
+						ctx.channel().close().await(1, TimeUnit.SECONDS);
 					} catch(Exception e) {
 						LOGGER.debug("Failure closing connection. ", e);
 					}
@@ -334,7 +334,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		} catch(Throwable e) {
 			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.  Current User: "+getCurrentUser(), e);
 			try {
-				ctx.close().await(1, TimeUnit.SECONDS);
+				ctx.channel().close().await(1, TimeUnit.SECONDS);
 			} catch(Exception e2) {
 				LOGGER.debug("Failure closing connection. ", e2);
 			}
@@ -372,7 +372,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		if(!msgOrderQueue.isEmpty() && System.currentTimeMillis()-msgOrderQueue.peek().getCreated() > 60000) {
 			LOGGER.warn("Message at bottom of queue has been in the queue longer than 1 mintue.  Terminating the connection.  User="+getCurrentUser());
 			try {
-				ctx.close().await(1, TimeUnit.SECONDS);
+				ctx.channel().close().await(1, TimeUnit.SECONDS);
 			} catch(Exception e) {
 				LOGGER.debug("Failure closing connection. ", e);
 			}
@@ -424,7 +424,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			LOGGER.error("Unexpected Error for user: "+getCurrentUser(), cause);
 		}
 		try {
-			ctx.close().await(1, TimeUnit.SECONDS);
+			ctx.channel().close().await(1, TimeUnit.SECONDS);
 		} catch(Exception e) {
 			LOGGER.debug("Failure closing connection. ", e);
 		}
