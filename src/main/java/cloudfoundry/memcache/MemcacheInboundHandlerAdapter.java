@@ -69,6 +69,10 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			BinaryMemcacheRequest request = null;
 			if (msg instanceof BinaryMemcacheRequest) {
 				long load = memcacheStats.checkOverload(getCurrentUser());
+				if(load > 0 && LOGGER.isDebugEnabled()) {
+					LOGGER.debug("Load reported for user "+getCurrentUser()+" load="+load);
+				}
+
 				if(load > loadWarningSize) {
 					LOGGER.warn("User overloading memcache. User="+getCurrentUser()+" Requests="+load+"/min");
 				}

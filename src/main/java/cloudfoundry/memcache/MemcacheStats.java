@@ -7,10 +7,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MemcacheStats {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheStats.class);
 	
 	public static class UserLoad {
 		private LongAdder requests;
@@ -26,6 +30,9 @@ public class MemcacheStats {
 			long loadTimeDiff = System.currentTimeMillis() - loadTimestamp;
 			if(loadTimeDiff > 60000) {
 				long count = requests.longValue();
+				if(LOGGER.isDebugEnabled()) {
+					LOGGER.debug("Resetting Load Counter.  Last Value: "+count);
+				}
 				requests.reset();
 				loadTimestamp = System.currentTimeMillis();
 				return count;
