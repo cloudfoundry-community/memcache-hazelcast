@@ -277,7 +277,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 
 	public void deleteCache(String name) {
 		//I know this isn't a great solution but is better than it was. :)
-		instance.getReplicatedMap(DELETED_CACHES_KEY).put(name, null);
+		instance.getReplicatedMap(DELETED_CACHES_KEY).put(name, "");
 		IMap<Object, Object> map = instance.getMap(name);
 		if(map != null) {
 			LOGGER.info("Destroying cache: "+name);
