@@ -69,7 +69,7 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 	}
 	
 	@Override
-	public UUID getAppGuid() {
+	public UUID getBindGuid() {
 		return appGuid;
 	}
 	

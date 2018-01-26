@@ -52,6 +52,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastMemcacheMsgHandlerFactory.class);
 	private static final String MEMCACHE_QUORUM_RULE = "memcacheQuorumRule";
 	public static final String EXECUTOR_INSTANCE_NAME = "memcache";
+	public static final String DELETED_CACHES_KEY = "deletedCachesKey";
 
 	private HazelcastInstance instance;
 	private ScheduledExecutorService executor;
@@ -269,8 +270,14 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler) {
 		return new HazelcastMemcacheMsgHandler(request, authMsgHandler, instance);
 	}
+	
+	public boolean isCacheValid(String cacheName) {
+		return !instance.getReplicatedMap(DELETED_CACHES_KEY).containsKey(cacheName);
+	}
 
 	public void deleteCache(String name) {
+		//I know this isn't a great solution but is better than it was. :)
+		instance.getReplicatedMap(DELETED_CACHES_KEY).put(name, null);
 		IMap<Object, Object> map = instance.getMap(name);
 		if(map != null) {
 			LOGGER.info("Destroying cache: "+name);

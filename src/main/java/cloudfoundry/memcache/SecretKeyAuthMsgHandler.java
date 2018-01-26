@@ -25,18 +25,20 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	boolean authenticated = false;
 	private String username;
 	private String key;
-	private UUID appGuid;
+	private UUID bindGuid;
 	private String cacheName;
 	private final String testUser;
 	private final String testPassword;
 	private final String testCacheName;
+	private final MemcacheMsgHandlerFactory factory;
 	
 
-	public SecretKeyAuthMsgHandler(String key, String testUser, String testPassword, String testCacheName) {
+	public SecretKeyAuthMsgHandler(MemcacheMsgHandlerFactory factory, String key, String testUser, String testPassword, String testCacheName) {
 		this.key = key;
 		this.testUser = testUser;
 		this.testPassword = testPassword;
 		this.testCacheName = testCacheName;
+		this.factory = factory;
 	}
 
 	@Override
@@ -74,23 +76,24 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 		String password = MemcacheUtils.extractSaslPassword(arrayContent);
 		boolean validPassword = validatePassword(username, password);
 		if (validPassword) {
-			authenticated = true;
 			if(testUser.equals(username)) {
 				cacheName = testCacheName;
 			} else {
 				cacheName = username.substring(0, username.lastIndexOf('|'));
-				appGuid = UUID.fromString(username.substring(username.lastIndexOf('|')+1, username.length()));
+				bindGuid = UUID.fromString(username.substring(username.lastIndexOf('|')+1, username.length()));
 			}
-			BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
-			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-			response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
-			response.setOpaque(opaque);
-			MemcacheUtils.writeAndFlush(ctx, response);
-		} else {
-			authenticated = false;
-			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
+			if(factory.isCacheValid(cacheName)) {
+				authenticated = true;
+				BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
+				response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+				response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
+				response.setOpaque(opaque);
+				MemcacheUtils.writeAndFlush(ctx, response);
+				return CompletedFuture.INSTANCE;
+			}
 		}
-		return CompletedFuture.INSTANCE;
+		authenticated = false;
+		return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
 	}
 
 	private boolean validatePassword(String username, String password) {
@@ -117,7 +120,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	}
 
 	@Override
-	public UUID getAppGuid() {
-		return appGuid;
+	public UUID getBindGuid() {
+		return bindGuid;
 	}
 }

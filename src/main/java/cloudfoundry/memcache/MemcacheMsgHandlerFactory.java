@@ -9,4 +9,5 @@ public interface MemcacheMsgHandlerFactory {
 	public void shutdown();
 	public void shutdownNow();
 	public String status();
+	boolean isCacheValid(String cacheName);
 }

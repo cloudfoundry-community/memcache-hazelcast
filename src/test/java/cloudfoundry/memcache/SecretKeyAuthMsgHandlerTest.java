@@ -23,10 +23,10 @@ public class SecretKeyAuthMsgHandlerTest {
 	private static final String TEST_USER = "test-user";
 	private static final String TEST_PASSWORD = "test-password";
 	private static final String TEST_CACHE = "test-cache";
-
+	
 	@Test
 	public void testAuthSuccess() {
-		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
+		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(new MemcacheMsgHandlerFactoryAuthStub(true), SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
 		assertFalse(authHandler.isAuthenticated());
 		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
 		request.setOpaque(1234);
@@ -45,14 +45,14 @@ public class SecretKeyAuthMsgHandlerTest {
 		MemcacheContent content = new DefaultMemcacheContent(Unpooled.wrappedBuffer(encodedAuth));
 		authHandler.startAuth(ctxMock, content);
 		assertTrue(authHandler.isAuthenticated());
-		assertEquals(authHandler.getAppGuid(), appGuid);
+		assertEquals(authHandler.getBindGuid(), appGuid);
 		assertEquals(authHandler.getCacheName(), username);
 		assertEquals(authHandler.getUsername(), username+'|'+appGuid.toString());
 	}
 
 	@Test
 	public void testAuthFailure() {
-		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
+		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(new MemcacheMsgHandlerFactoryAuthStub(true), SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
 		assertFalse(authHandler.isAuthenticated());
 		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
 		request.setOpaque(1234);
@@ -75,8 +75,31 @@ public class SecretKeyAuthMsgHandlerTest {
 	}
 
 	@Test
+	public void testCacheFailure() {
+		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(new MemcacheMsgHandlerFactoryAuthStub(false), SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
+		assertFalse(authHandler.isAuthenticated());
+		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
+		request.setOpaque(1234);
+		request.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
+		String username = "plan"+UUID.randomUUID().toString();
+		UUID appGuid = UUID.randomUUID();
+		String password = Base64.encodeBase64String(DigestUtils.sha384((username+'|'+appGuid.toString()+SECRET_KEY).getBytes()));
+		byte[] encodedAuth = createdEncodedAuth(username, appGuid, password);
+		request.setTotalBodyLength(encodedAuth.length);
+		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
+		Channel channelMock = EasyMock.createNiceMock(Channel.class);
+		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
+		EasyMock.replay(ctxMock);
+		authHandler.startAuth(ctxMock , request);
+		
+		MemcacheContent content = new DefaultMemcacheContent(Unpooled.wrappedBuffer(encodedAuth));
+		authHandler.startAuth(ctxMock, content);
+		assertFalse(authHandler.isAuthenticated());
+	}
+
+	@Test
 	public void testTestUserSuccess() {
-		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
+		AuthMsgHandler authHandler = new SecretKeyAuthMsgHandler(new MemcacheMsgHandlerFactoryAuthStub(true), SECRET_KEY, TEST_USER, TEST_PASSWORD, TEST_CACHE);
 		assertFalse(authHandler.isAuthenticated());
 		BinaryMemcacheRequest request = new DefaultBinaryMemcacheRequest(Unpooled.wrappedBuffer("PLAIN".getBytes()));
 		request.setOpaque(1234);

@@ -13,6 +13,6 @@ public interface AuthMsgHandler {
 	Future<?> startAuth(ChannelHandlerContext ctx, MemcacheContent content);
 	boolean isAuthenticated();
 	String getUsername();
-	UUID getAppGuid();
+	UUID getBindGuid();
 	String getCacheName();
 }

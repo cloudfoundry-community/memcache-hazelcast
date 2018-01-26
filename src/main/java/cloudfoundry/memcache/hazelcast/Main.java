@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 import cf.dropsonde.spring.boot.EnableMetronClient;
 import cloudfoundry.memcache.AuthMsgHandlerFactory;
+import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
 import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
@@ -29,8 +30,8 @@ public class Main {
 	}
 
 	@Bean
-	AuthMsgHandlerFactory authHandlerFactory(MemcacheHazelcastConfig config) {
-		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey(), config.getMemcache().getTestUser(), config.getMemcache().getTestPassword(), config.getMemcache().getTestCache());
+	AuthMsgHandlerFactory authHandlerFactory(MemcacheHazelcastConfig config, MemcacheMsgHandlerFactory factory) {
+		return new SecretKeyAuthMsgHandlerFactory(factory, config.getMemcache().getSecretKey(), config.getMemcache().getTestUser(), config.getMemcache().getTestPassword(), config.getMemcache().getTestCache());
 	}
 
 	@Bean
