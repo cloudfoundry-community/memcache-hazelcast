@@ -44,7 +44,7 @@ public class MemcacheServer {
 					@Override
 					protected void initChannel(SocketChannel ch) throws Exception {
 						ch.pipeline().addFirst("memcache", new BinaryMemcacheServerCodec());
-						ch.pipeline().addLast("memcache-handler", new MemcacheInboundHandlerAdapter(msgHandlerFactory, authMsgHandlerFactory.createAuthMsgHandler(), queueSize, loadWarningSize, MemcacheServer.this, memcacheStats));
+						ch.pipeline().addLast("memcache-handler", new MemcacheInboundHandlerAdapter(msgHandlerFactory, authMsgHandlerFactory.createAuthMsgHandler(msgHandlerFactory), queueSize, loadWarningSize, MemcacheServer.this, memcacheStats));
 					}
 				})
 				.childOption(ChannelOption.TCP_NODELAY, true)

@@ -6,10 +6,9 @@ public class SecretKeyAuthMsgHandlerFactory implements AuthMsgHandlerFactory {
 	private final String testUser;
 	private final String testPassword;
 	private final String testCacheName;
-	private final MemcacheMsgHandlerFactory factory;
 
 	
-	public SecretKeyAuthMsgHandlerFactory(MemcacheMsgHandlerFactory factory, String key, String testUser, String testPassword, String testCacheName) {
+	public SecretKeyAuthMsgHandlerFactory(String key, String testUser, String testPassword, String testCacheName) {
 		if(key == null) {
 			throw new IllegalArgumentException("null key");
 		}
@@ -17,12 +16,10 @@ public class SecretKeyAuthMsgHandlerFactory implements AuthMsgHandlerFactory {
 		this.testUser = testUser;
 		this.testPassword = testPassword;
 		this.testCacheName = testCacheName;
-		this.factory = factory;
-
 	}
 
 	@Override
-	public AuthMsgHandler createAuthMsgHandler() {
+	public AuthMsgHandler createAuthMsgHandler(MemcacheMsgHandlerFactory factory) {
 		return new SecretKeyAuthMsgHandler(factory, key, testUser, testPassword, testCacheName);
 	}
 }

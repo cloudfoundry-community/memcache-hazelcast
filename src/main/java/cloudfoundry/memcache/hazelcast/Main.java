@@ -30,8 +30,8 @@ public class Main {
 	}
 
 	@Bean
-	AuthMsgHandlerFactory authHandlerFactory(MemcacheHazelcastConfig config, MemcacheMsgHandlerFactory factory) {
-		return new SecretKeyAuthMsgHandlerFactory(factory, config.getMemcache().getSecretKey(), config.getMemcache().getTestUser(), config.getMemcache().getTestPassword(), config.getMemcache().getTestCache());
+	AuthMsgHandlerFactory authHandlerFactory(MemcacheHazelcastConfig config) {
+		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey(), config.getMemcache().getTestUser(), config.getMemcache().getTestPassword(), config.getMemcache().getTestCache());
 	}
 
 	@Bean
