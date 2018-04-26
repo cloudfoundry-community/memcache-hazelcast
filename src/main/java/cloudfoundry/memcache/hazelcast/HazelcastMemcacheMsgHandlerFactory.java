@@ -272,6 +272,9 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	}
 	
 	public boolean isCacheValid(String cacheName) {
+		if(instance == null || instance.getReplicatedMap(DELETED_CACHES_KEY) == null) {
+			return false;
+		}
 		return !instance.getReplicatedMap(DELETED_CACHES_KEY).containsKey(cacheName);
 	}
 
