@@ -48,7 +48,7 @@ public class HazelcastMemcapableTest {
 
 	@Test
 	public void runMemcapable() throws Exception {
-		ProcessBuilder pb = new ProcessBuilder("memcapable", "-h", "127.0.0.1", "-p", Integer.toString(localPort), "-b", "-v", "-t", "1000");
+		ProcessBuilder pb = new ProcessBuilder("memccapable", "-p", Integer.toString(localPort), "-b", "-v", "-t", "1000");
 		pb.redirectErrorStream(true);
 		pb.inheritIO();
 		Process process = pb.start();

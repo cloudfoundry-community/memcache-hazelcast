@@ -43,7 +43,7 @@ public class Main {
 	MemcacheServer memcacheServer(AuthMsgHandlerFactory authFactory,
 			MemcacheHazelcastConfig config, MemcacheStats memcacheStats) {
 		MemcacheServer server = new MemcacheServer(config.getMemcache().getPort(), authFactory,
-				config.getMemcache().getMaxQueueSize(), config.getMemcache().getLoadWarningSize(), memcacheStats);
+				config.getMemcache().getMaxQueueSize(), config.getMemcache().getRequestRateLimit(), memcacheStats);
 		return server;
 	}
 

@@ -1,5 +1,7 @@
 package cloudfoundry.memcache;
 
+import java.util.concurrent.ScheduledExecutorService;
+
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 
 public class MemcacheMsgHandlerFactoryAuthStub implements MemcacheMsgHandlerFactory {
@@ -29,6 +31,11 @@ public class MemcacheMsgHandlerFactoryAuthStub implements MemcacheMsgHandlerFact
 
 	@Override
 	public void deleteCache(String name) {
+	}
+
+	@Override
+	public ScheduledExecutorService getScheduledExecutorService() {
+		return null;
 	}
 
 	@Override

@@ -3,8 +3,8 @@ package cloudfoundry.memcache.hazelcast;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PreDestroy;
@@ -55,7 +55,8 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	public static final String DELETED_CACHES_KEY = "deletedCachesKey";
 
 	private HazelcastInstance instance;
-	private ScheduledExecutorService executor;
+	private ScheduledExecutorService memoryTrimmerExecutor;
+	private ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(4);
 	private volatile boolean shuttingDown = false;
 
 	public HazelcastMemcacheMsgHandlerFactory(MemcacheServer memcacheServer, MemcacheHazelcastConfig appConfig) {
@@ -146,17 +147,17 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 					try {
 						if (quorumEvent.isPresent()) {
 							if(appConfig.getHazelcast().getEnableMemoryTrimmer()) {
-								if(executor == null) {
-									executor = new ScheduledThreadPoolExecutor(1);
-									executor.scheduleWithFixedDelay(new MaxHeapTrimmer(HazelcastMemcacheMsgHandlerFactory.this, appConfig.getHazelcast().getMaxCacheSize(), appConfig.getHazelcast().getPercentToTrim()), appConfig.getHazelcast().getTrimDelay(), appConfig.getHazelcast().getTrimDelay(), TimeUnit.SECONDS);
+								if(memoryTrimmerExecutor == null) {
+									memoryTrimmerExecutor = Executors.newScheduledThreadPool(1);
+									memoryTrimmerExecutor.scheduleWithFixedDelay(new MaxHeapTrimmer(HazelcastMemcacheMsgHandlerFactory.this, appConfig.getHazelcast().getMaxCacheSize(), appConfig.getHazelcast().getPercentToTrim()), appConfig.getHazelcast().getTrimDelay(), appConfig.getHazelcast().getTrimDelay(), TimeUnit.SECONDS);
 								}
 							}
 							memcacheServer.start(HazelcastMemcacheMsgHandlerFactory.this);
 						} else {
 							memcacheServer.shutdown();
-							if(executor != null) {
-								executor.shutdown();
-								executor = null;
+							if(memoryTrimmerExecutor != null) {
+								memoryTrimmerExecutor.shutdownNow();
+								memoryTrimmerExecutor = null;
 							}
 						}
 					} catch(Exception e) {
@@ -182,18 +183,18 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 					try {
 						if(LifecycleState.STARTED.equals(event.getState())) {
 							if(appConfig.getHazelcast().getEnableMemoryTrimmer()) {
-								if(executor == null) {
-									executor = new ScheduledThreadPoolExecutor(1);
-									executor.scheduleWithFixedDelay(new MaxHeapTrimmer(HazelcastMemcacheMsgHandlerFactory.this, appConfig.getHazelcast().getMaxCacheSize(), appConfig.getHazelcast().getPercentToTrim()), appConfig.getHazelcast().getTrimDelay(), appConfig.getHazelcast().getTrimDelay(), TimeUnit.SECONDS);
+								if(memoryTrimmerExecutor == null) {
+									memoryTrimmerExecutor = Executors.newScheduledThreadPool(1);
+									memoryTrimmerExecutor.scheduleWithFixedDelay(new MaxHeapTrimmer(HazelcastMemcacheMsgHandlerFactory.this, appConfig.getHazelcast().getMaxCacheSize(), appConfig.getHazelcast().getPercentToTrim()), appConfig.getHazelcast().getTrimDelay(), appConfig.getHazelcast().getTrimDelay(), TimeUnit.SECONDS);
 								}
 							}
 							memcacheServer.start(HazelcastMemcacheMsgHandlerFactory.this);
 						}
 						if(LifecycleState.SHUTTING_DOWN.equals(event.getState())) {
 							memcacheServer.shutdown();
-							if(executor != null) {
-								executor.shutdown();
-								executor = null;
+							if(memoryTrimmerExecutor != null) {
+								memoryTrimmerExecutor.shutdownNow();
+								memoryTrimmerExecutor = null;
 							}
 						}
 					} catch(Exception e) {
@@ -289,6 +290,11 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	}
 	
 	@Override
+	public ScheduledExecutorService getScheduledExecutorService() {
+		return scheduledExecutorService;
+	}
+	
+	@Override
 	public String status() {
 		if(shuttingDown)  {
 			return "Shuttingdown";
@@ -314,8 +320,15 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	@PreDestroy
 	public void shutdown() {
 		if(!shuttingDown) {
-			LOGGER.info("Shutting down Hazelcast.");
 			shuttingDown = true;
+			LOGGER.info("Shutting down Hazelcast.");
+			if(scheduledExecutorService != null) {
+				try {
+					scheduledExecutorService.shutdown();
+				} catch(Exception e) {
+					LOGGER.warn("Unexpected error attempting to shutdown Executor. Ignoring.", e);
+				}
+			}
 			if(instance != null) {
 				instance.shutdown();
 			}
@@ -326,6 +339,13 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 		if(!shuttingDown) {
 			LOGGER.info("Terminating Hazelcast.");
 			shuttingDown = true;
+			if(scheduledExecutorService != null) {
+				try {
+					scheduledExecutorService.shutdownNow();
+				} catch(Exception e) {
+					LOGGER.warn("Unexpected error attempting to shutdown Executor. Ignoring.", e);
+				}
+			}
 			if(instance != null) {
 				instance.getLifecycleService().terminate();
 			}

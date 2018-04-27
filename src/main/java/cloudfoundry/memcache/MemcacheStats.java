@@ -4,77 +4,82 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MemcacheStats {
-	
-	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheStats.class);
+	public static long REQUEST_RATE_LIMIT_WINDOW_LENGTH = 10000;
 	
 	public static class UserLoad {
-		private AtomicLong requests;
-		private volatile long loadTimestamp;
+		private volatile long requestsAtWindowStart;
+		private volatile long windowEndTime;
+		private final LongAdder totalRequests = new LongAdder();
 
 		public UserLoad() {
-			requests = new AtomicLong();
-			loadTimestamp = System.currentTimeMillis();
+			requestsAtWindowStart = 0;
+			windowEndTime = System.currentTimeMillis()+REQUEST_RATE_LIMIT_WINDOW_LENGTH;
 		}
 		
-		private long checkOverload() {
-			requests.incrementAndGet();
-			long loadTimeDiff = System.currentTimeMillis() - loadTimestamp;
-			if(loadTimeDiff > 60000) {
-				loadTimestamp = System.currentTimeMillis();
-				long count = requests.getAndSet(0);
-				if(LOGGER.isDebugEnabled()) {
-					LOGGER.debug("Resetting Load Counter.  Last Value: "+count);
-				}
-				return count;
-			}
-			return 0;
+		public void recordRequest() {
+			totalRequests.increment();
 		}
-
+		
+		public long requestsInWindow() {
+			long currentTime = System.currentTimeMillis();
+			long currentRequests = totalRequests.sum();
+			if(windowEndTime <= currentTime) {
+				requestsAtWindowStart = currentRequests;
+				windowEndTime = currentTime+REQUEST_RATE_LIMIT_WINDOW_LENGTH;
+			}
+			return currentRequests - requestsAtWindowStart;
+		}
+		
+		public long msLeftInWindow() {
+			long timeLeftInWindow = windowEndTime - System.currentTimeMillis();
+			if(timeLeftInWindow < 0) {
+				return 0;
+			}
+			return timeLeftInWindow;
+		}
 	}
 	
 	public MemcacheStats() {
-		Map<Byte, AtomicLong> mutableOpcodeHits = new HashMap<>();
+		Map<Byte, LongAdder> mutableOpcodeHits = new HashMap<>();
 		for(MemcacheOpcodes memcacheOpcodes : MemcacheOpcodes.values()) {
-			mutableOpcodeHits.put(memcacheOpcodes.opcode(), new AtomicLong());
+			mutableOpcodeHits.put(memcacheOpcodes.opcode(), new LongAdder());
 		}
 		opcodeHits = Collections.unmodifiableMap(mutableOpcodeHits);
 		userLoad = new ConcurrentHashMap<String, MemcacheStats.UserLoad>();
 	}
 
-	private final Map<Byte, AtomicLong> opcodeHits;
+	private final Map<Byte, LongAdder> opcodeHits;
 	private final Map<String, UserLoad> userLoad;
 	
-	public long checkOverload(String username) {
-		UserLoad load = userLoad.get(username);
-		if(load == null) {
-			UserLoad newLoad = new UserLoad();
-			load = userLoad.putIfAbsent(username, newLoad);
-			if(load == null) {
-				load = newLoad;
-			}
-		}
-		return load.checkOverload();
+	public long requestsInWindow(String username) {
+		return aquireUserLoadForUser(username).requestsInWindow();
 	}
-	
-	public void logHit(Byte opcode) {
-		AtomicLong value = opcodeHits.get(opcode);
+
+	public long msLeftInWindow(String username) {
+		return aquireUserLoadForUser(username).msLeftInWindow();
+	}
+
+	public void logHit(Byte opcode, String username) {
+		LongAdder value = opcodeHits.get(opcode);
 		if(value == null) {
 			value = opcodeHits.get(MemcacheOpcodes.UNKNOWN.opcode);
 		}
-		value.incrementAndGet();
+		value.increment();
+		aquireUserLoadForUser(username).recordRequest();
+	}
+
+	private UserLoad aquireUserLoadForUser(String username) {
+		return userLoad.computeIfAbsent(username, (key) -> new UserLoad());
 	}
 	
-	public Map<String, AtomicLong> getHitStats() {
-		Map<String, AtomicLong> hitStats = new HashMap<>();
+	public Map<String, LongAdder> getHitStats() {
+		Map<String, LongAdder> hitStats = new HashMap<>();
 		for(MemcacheOpcodes memcacheOpcode : MemcacheOpcodes.values()) {
 			hitStats.put(memcacheOpcode.name().toLowerCase(), opcodeHits.get(memcacheOpcode.opcode()));
 		}
@@ -127,15 +132,6 @@ public class MemcacheStats {
 	    
 	    public Byte opcode() {
 	    	return opcode;
-	    }
-	    
-	    public static MemcacheOpcodes findByOpcode(Byte opcode) {
-	    	for(MemcacheOpcodes memcacheOpcode : MemcacheOpcodes.values()) {
-	    		if(memcacheOpcode.opcode() == opcode) {
-	    			return memcacheOpcode;
-	    		}
-	    	}
-	    	return MemcacheOpcodes.UNKNOWN;
 	    }
 	}
 }

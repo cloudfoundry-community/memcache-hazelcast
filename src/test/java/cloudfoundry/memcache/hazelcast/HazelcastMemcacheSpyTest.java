@@ -12,6 +12,7 @@ import java.util.Random;
 
 import net.spy.memcached.AddrUtil;
 import net.spy.memcached.ConnectionFactoryBuilder;
+import net.spy.memcached.DefaultConnectionFactory;
 import net.spy.memcached.ConnectionFactoryBuilder.Protocol;
 import net.spy.memcached.MemcachedClient;
 import net.spy.memcached.auth.AuthDescriptor;
@@ -52,7 +53,7 @@ public class HazelcastMemcacheSpyTest {
 		}
 
 		System.out.println("Localport: "+localPort);
-		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, new MemcacheStats());
+		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 1000, 1000, new MemcacheStats());
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
@@ -68,8 +69,8 @@ public class HazelcastMemcacheSpyTest {
 		binaryConnectionFactory.setShouldOptimize(true);
 		binaryConnectionFactory.setAuthWaitTime(10000000);
 		binaryConnectionFactory.setOpTimeout(10000000);
-
-		 c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:"+localPort));
+		
+		c = new net.spy.memcached.MemcachedClient(binaryConnectionFactory.build(), AddrUtil.getAddresses("127.0.0.1:"+localPort));
 	}
 	
 	@AfterClass
@@ -92,32 +93,36 @@ public class HazelcastMemcacheSpyTest {
 		Assert.assertEquals(c.get("someKey"), "Some Data Set!");
 	}
 
-/*	@Test
-	public void backpressuretest() throws Exception {
+//	@Test
+//	public void backpressuretest() throws Exception {
+//		c.set("someKey", 0, "Some Data Set!").get();
+//		List<GetFuture<Object>> futures = new ArrayList<>();
+//		for(int loop = 0; loop < 10000; loop++) {
+//			System.out.println("loop index: "+loop);
+//			futures.add(c.asyncGet("someKey"+loop));
+//		}
+//		
+//		for(GetFuture<Object> future : futures) {
+//			future.get();
+//			System.out.println("Got response");
+//		}
+//		System.out.println("Test all done!");
+//	}
+
+	@Test
+	public void ratelimittest() throws Exception {
 		c.set("someKey", 0, "Some Data Set!").get();
-		List<GetFuture<Object>> futures = new ArrayList<>();
-		for(int loop = 0; loop < 1000; loop++) {
+		long startTime = System.currentTimeMillis();
+		for(int loop = 0; loop < 2000; loop++) {
 			System.out.println("loop index: "+loop);
-			futures.add(c.asyncGet("someKey"+loop));
+			c.get("someKey"+loop);
 		}
+		long finishTime = System.currentTimeMillis();
 		
-		for(GetFuture<Object> future : futures) {
-			future.get();
-			System.out.println("Got response");
+		if(finishTime - startTime < 10000) {
+			Assert.fail("Rate limit test finished faster than 5 seconds.  Rate limiting didn't appear to work.");
 		}
-		Thread.sleep(60000);
-		futures = new ArrayList<>();
-		for(int loop = 0; loop < 10; loop++) {
-			System.out.println("loop index: "+loop);
-			futures.add(c.asyncGet("someKey"+loop));
-		}
-		
-		for(GetFuture<Object> future : futures) {
-			future.get();
-			System.out.println("Got response");
-		}
-		Assert.assertEquals(c.get("someKey"), "Some Data Set!");
-	}*/
+	}
 
 	@Test
 	public void setWithExpiration() throws Exception {

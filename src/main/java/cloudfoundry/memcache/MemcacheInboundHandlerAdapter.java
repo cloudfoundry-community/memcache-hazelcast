@@ -2,7 +2,11 @@ package cloudfoundry.memcache;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -33,21 +37,43 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	private final AuthMsgHandler authMsgHandler;
 	private final Deque<DelayedMessage> msgOrderQueue;
 	private final MemcacheStats memcacheStats;
-	private long lastLoggedQueueSize;
 	DelayedMessage delayedMessage;
 	MemcacheServer memcacheServer;
-	private final int loadWarningSize;
+	private final int requestRateLimit;
+	private final int queueSizeLimit;
+	private volatile boolean scheduledRead = false;
+	private long triggeredRequestLimitDuration = 0;
+	private long triggeredRequestLimitStart = 0;
+	private boolean triggeredRequestRateLimit = false;
+	private long loggableRequestRate = 0;
+	private boolean triggeredQueueLimit = false;
+	private long loggableQueueSize = 0;
 	
-	private int maxQueueSize;
 
-	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int maxQueueSize, int loadWarningSize, MemcacheServer memcacheServer, MemcacheStats memcacheStats) {
+	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int queueSizeLimit, int requestRateLimit, MemcacheServer memcacheServer, MemcacheStats memcacheStats) {
 		super();
 		this.msgHandlerFactory = msgHandlerFactory;
 		this.authMsgHandler = authMsgHandler;
-		this.maxQueueSize = maxQueueSize;
-		this.loadWarningSize = loadWarningSize;
+		this.queueSizeLimit = queueSizeLimit;
+		this.requestRateLimit = requestRateLimit;
 		this.memcacheStats = memcacheStats;
-		msgOrderQueue = new ArrayDeque<>(maxQueueSize+20);
+		msgOrderQueue = new ArrayDeque<>(queueSizeLimit+100);
+		msgHandlerFactory.getScheduledExecutorService().scheduleAtFixedRate(() -> {
+			if(LOGGER.isDebugEnabled()) {
+				LOGGER.debug("Current load rate for "+getCurrentUser()+" is "+loggableRequestRate+" requests/10sec");
+				LOGGER.debug("Current request queue size for "+getCurrentUser()+" is "+loggableQueueSize);
+			}
+			if(triggeredRequestRateLimit) {
+				LOGGER.warn("The user "+getCurrentUser()+"'s requests are being rate limited at "+loggableRequestRate+" requests/10sec and lasted for "+triggeredRequestLimitDuration+"ms");
+				loggableRequestRate = 0;
+				triggeredRequestRateLimit = false;
+			}
+			if(triggeredQueueLimit) {
+				LOGGER.warn("The user "+getCurrentUser()+"'s queue is being rate limited at a size of "+loggableQueueSize);
+				triggeredQueueLimit = false;
+				loggableQueueSize = 0;
+			}
+		}, 60, 60, TimeUnit.SECONDS);
 	}
 
 	@Override
@@ -58,7 +84,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				clearDelayedMessages();
 			}
 		});
-		readIfQueueSmallEnough(ctx);
+		readIfNotRateLimited(ctx);
 	}
 	
 	@Override
@@ -69,14 +95,6 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 			BinaryMemcacheRequest request = null;
 			if (msg instanceof BinaryMemcacheRequest) {
-				long load = memcacheStats.checkOverload(getCurrentUser());
-				if(load > 0 && LOGGER.isDebugEnabled()) {
-					LOGGER.debug("Load reported for user "+getCurrentUser()+" load="+load);
-				}
-
-				if(load > loadWarningSize) {
-					LOGGER.warn("User overloading memcache. User="+getCurrentUser()+" Requests="+load+"/min");
-				}
 				request = (BinaryMemcacheRequest) msg;
 				delayedMessage = new DelayedMessage(new MemcacheRequestKey(request));
 				msgOrderQueue.offer(delayedMessage);
@@ -87,7 +105,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					} else {
 						currentMsgHandler = new NoAuthMemcacheMsgHandler(request);
 					}
-					memcacheStats.logHit(opcode);
+					memcacheStats.logHit(opcode, getCurrentUser());
 				}
 			} else if(currentMsgHandler == null) {
 				return;
@@ -378,23 +396,57 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 			return;
 		}
-		readIfQueueSmallEnough(ctx);
+		readIfNotRateLimited(ctx);
 	}
 
 	@Override
 	public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-		readIfQueueSmallEnough(ctx);
+		readIfNotRateLimited(ctx);
 		super.channelReadComplete(ctx);
 	}
 
-	private void readIfQueueSmallEnough(ChannelHandlerContext ctx) {
-		if(msgOrderQueue.size() < maxQueueSize) {
-			ctx.read();
-		} else {
-			if(lastLoggedQueueSize+10000 < System.currentTimeMillis()) {
-				lastLoggedQueueSize = System.currentTimeMillis();
-				LOGGER.warn("Max queue size hit.  Applying back pressure. User="+getCurrentUser()+" QueueSize="+msgOrderQueue.size());
+	private void readIfNotRateLimited(ChannelHandlerContext ctx) {
+		boolean requestLimitHit = false;
+		long load = memcacheStats.requestsInWindow(getCurrentUser());
+
+		if(load > loggableRequestRate) {
+			loggableRequestRate = load;
+		}
+
+		if(load > requestRateLimit) {
+			requestLimitHit = true;
+			if(!scheduledRead) {
+				scheduledRead = true;
+				if(triggeredRequestLimitStart == 0) {
+					triggeredRequestLimitStart = System.currentTimeMillis();
+				}
+				msgHandlerFactory.getScheduledExecutorService().schedule(() -> {
+					scheduledRead = false;
+					readIfNotRateLimited(ctx);
+				}, memcacheStats.msLeftInWindow(getCurrentUser()), TimeUnit.MILLISECONDS);
 			}
+		}
+
+		boolean queueLimitHit = false;
+		int queueSize = msgOrderQueue.size();
+		if(queueSize > loggableQueueSize) {
+			loggableQueueSize = queueSize;
+		}
+		if(queueSize >= queueSizeLimit) {
+			queueLimitHit = true;
+			triggeredQueueLimit = true;
+		}
+		
+		if(!requestLimitHit && !queueLimitHit) {
+			if(triggeredRequestLimitStart != 0) {
+				triggeredRequestRateLimit = true;
+				long duration = System.currentTimeMillis() - triggeredRequestLimitStart;
+				if(duration > triggeredRequestLimitDuration) {
+					triggeredRequestLimitDuration = duration;
+				}
+				triggeredRequestLimitStart = 0;
+			}
+			ctx.read();
 		}
 	}
 

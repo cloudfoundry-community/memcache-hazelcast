@@ -292,7 +292,7 @@ public class MemcacheHazelcastConfig {
 		@NotEmpty String testPassword;
 		@NotEmpty String testCache;
 		@NotNull Integer maxQueueSize;
-		@NotNull Integer loadWarningSize;
+		@NotNull Integer requestRateLimit;
 		
 		public Integer getPort() {
 			return port;
@@ -330,11 +330,11 @@ public class MemcacheHazelcastConfig {
 		public void setMaxQueueSize(Integer maxQueueSize) {
 			this.maxQueueSize = maxQueueSize;
 		}
-		public Integer getLoadWarningSize() {
-			return loadWarningSize;
+		public Integer getRequestRateLimit() {
+			return requestRateLimit;
 		}
-		public void setLoadWarningSize(Integer loadWarningSize) {
-			this.loadWarningSize = loadWarningSize;
+		public void setRequestRateLimit(Integer requestRateLimit) {
+			this.requestRateLimit = requestRateLimit;
 		}
 	}
 }
