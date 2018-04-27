@@ -2,6 +2,7 @@ package cloudfoundry.memcache.hazelcast;
 
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
@@ -19,10 +20,12 @@ public class HazelcastAppendPrependCallable implements HazelcastInstanceAware, C
 	private byte[] key;
 	HazelcastMemcacheCacheValue cacheValue;
 	boolean append;
+	private long maxValueSize;
 
 	public HazelcastAppendPrependCallable() {	}
 
-	public HazelcastAppendPrependCallable(String cacheName, byte[] key, HazelcastMemcacheCacheValue cacheValue, boolean append) {
+	public HazelcastAppendPrependCallable(String cacheName, byte[] key, HazelcastMemcacheCacheValue cacheValue, boolean append, long maxValueSize) {
+		this.maxValueSize = maxValueSize;
 		this.cacheName = cacheName;
 		this.key = key;
 		this.cacheValue = cacheValue;
@@ -43,8 +46,8 @@ public class HazelcastAppendPrependCallable implements HazelcastInstanceAware, C
 				return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.DELTA_BADVAL, "Value appears to be an inc/dec number.  Cannot append/prepend to this.");
 			}
 			int totalValueLength = value.getValueLength() + cacheValue.getValueLength();
-			if (totalValueLength > HazelcastMemcacheMsgHandler.MAX_VALUE_SIZE) {
-				return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.E2BIG, "New value too big.  Max Value is " + HazelcastMemcacheMsgHandler.MAX_VALUE_SIZE);
+			if (totalValueLength > maxValueSize) {
+				return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.E2BIG, "New value too big.  Max Value is " + maxValueSize);
 			}
 			HazelcastMemcacheCacheValue newValue = new HazelcastMemcacheCacheValue(totalValueLength, value.getFlags(), value.getExpiration());
 			if(append) {
@@ -87,6 +90,11 @@ public class HazelcastAppendPrependCallable implements HazelcastInstanceAware, C
 		key = in.readByteArray();
 		cacheValue = in.readObject();
 		append = in.readBoolean();
+		try {
+			maxValueSize = in.readLong();
+		} catch(EOFException e) {
+			maxValueSize = 1048576;
+		}
 	}
 
 	@Override
@@ -95,5 +103,6 @@ public class HazelcastAppendPrependCallable implements HazelcastInstanceAware, C
 		out.writeByteArray(key);
 		out.writeObject(cacheValue);
 		out.writeBoolean(append);
+		out.writeLong(maxValueSize);
 	}
 }

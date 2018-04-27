@@ -55,6 +55,7 @@ public class HazelcastMemcacheStatsTest {
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
+		appConfig.getMemcache().setMaxValueSize(10485760);
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
 
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {

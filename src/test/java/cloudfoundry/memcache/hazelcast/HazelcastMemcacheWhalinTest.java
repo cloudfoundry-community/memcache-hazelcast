@@ -1,8 +1,14 @@
 package cloudfoundry.memcache.hazelcast;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
+import static org.testng.Assert.assertTrue;
+
 import java.net.ServerSocket;
 import java.util.Collections;
+import java.util.Random;
 
+import org.apache.commons.lang.RandomStringUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -14,6 +20,7 @@ import cloudfoundry.memcache.MemcacheServer;
 import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
+import io.netty.util.CharsetUtil;
 
 import com.hazelcast.config.Config;
 import com.schooner.MemCached.AuthInfo;
@@ -40,6 +47,7 @@ public class HazelcastMemcacheWhalinTest {
 		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, new MemcacheStats());
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
+		appConfig.getMemcache().setMaxValueSize(10485760);
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
 
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
@@ -99,4 +107,16 @@ public class HazelcastMemcacheWhalinTest {
 		c.set("nothingHereGet", "Some Data!");
 		Assert.assertEquals(c.get("nothingHereGet"), "Some Data!");
 	}
+
+	@Test
+	public void setKeyReallyBig() throws Exception {
+		String randomAlphanumeric = RandomStringUtils.randomAlphanumeric(20000);
+		boolean result = c.set(randomAlphanumeric, "Groovy Value");
+		assertFalse(result);
+		//Confirm connection still works after that failure
+		result = c.set("SmallKey", "Groovy Value");
+		assertTrue(result);
+
+	}
+
 }

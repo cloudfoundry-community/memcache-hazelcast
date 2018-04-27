@@ -80,13 +80,13 @@ public class MemcacheUtils {
 	public static void logRequest(BinaryMemcacheRequest request) {
 		if (LOGGER.isDebugEnabled()) {
 			LOGGER.debug("Opcode: " + request.opcode());
-			LOGGER.debug("Key Length: " + request.keyLength());
+			LOGGER.debug("Key Length: " + Short.toUnsignedInt(request.keyLength()));
 			LOGGER.debug("Key: " + request.key());
 			LOGGER.debug("CAS: " + request.cas());
 			LOGGER.debug("Magic: " + request.magic());
 			LOGGER.debug("Reserved: " + request.reserved());
 			LOGGER.debug("Opaque: " + request.opaque());
-			LOGGER.debug("Extras Length: " + request.extrasLength());
+			LOGGER.debug("Extras Length: " + Byte.toUnsignedInt(request.extrasLength()));
 			LOGGER.debug("Body Length: " + request.totalBodyLength());
 		}
 	}

@@ -1,9 +1,11 @@
 package cloudfoundry.memcache.hazelcast;
 
 import static org.junit.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
 
 import java.net.ServerSocket;
 import java.net.SocketAddress;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -23,6 +25,7 @@ import net.spy.memcached.internal.OperationFuture;
 import net.spy.memcached.ops.StatusCode;
 import net.spy.memcached.transcoders.SerializingTranscoder;
 
+import org.apache.commons.lang.RandomStringUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
@@ -35,6 +38,7 @@ import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandler;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
+import io.netty.util.CharsetUtil;
 
 import com.hazelcast.config.Config;
 
@@ -57,6 +61,7 @@ public class HazelcastMemcacheSpyTest {
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
+		appConfig.getMemcache().setMaxValueSize(10485760);
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
 
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
@@ -141,8 +146,24 @@ public class HazelcastMemcacheSpyTest {
 	}
 
 	@Test
+	public void setValueReallyBig() throws Exception {
+		byte[] data = new byte[10485760];
+		new Random().nextBytes(data);
+		OperationFuture<Boolean> setResult = c.set("BigValue", 0, data);
+		assertTrue(setResult.get());
+	}
+
+	@Test
+	public void setKeyReallyBig() throws Exception {
+		String randomAlphabetic = RandomStringUtils.randomAlphabetic(250);
+		OperationFuture<Boolean> setResult = c.set(randomAlphabetic, 0, "Groovy Value");
+		assertTrue(setResult.get());
+		assertEquals("Groovy Value", c.get(randomAlphabetic));
+	}
+
+	@Test
 	public void setValueTooBig() throws Exception {
-		byte[] data = new byte[20004857];
+		byte[] data = new byte[10485761];
 		new Random().nextBytes(data);
 		try {
 			OperationFuture<Boolean> setResult = c.set("BigValue", 0, data);

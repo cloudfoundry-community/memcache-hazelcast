@@ -42,7 +42,6 @@ import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastMemcacheMsgHandler.class);
-	public static final int MAX_VALUE_SIZE = 1048576;
 	final HazelcastInstance instance;
 	HazelcastMemcacheCacheValue cacheValue;
 	final AuthMsgHandler authMsgHandler;
@@ -53,15 +52,17 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	final int opaque;
 	final byte[] key;
 	final long cas;
+	final int maxValueSize;
 	long expirationInSeconds;
 
-	public HazelcastMemcacheMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler, HazelcastInstance instance) {
+	public HazelcastMemcacheMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler, HazelcastInstance instance, Integer maxValueSize) {
 		this.authMsgHandler = authMsgHandler;
 		this.instance = instance;
 		this.opcode = request.opcode();
 		this.opaque = request.opaque();
 		this.key = request.key() == null ? null : Unpooled.copiedBuffer(request.key()).array();
 		this.cas = request.cas();
+		this.maxValueSize = maxValueSize;
 	}
 
 	@Override
@@ -204,9 +205,9 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	private Future<?> processSetAddReplaceRequest(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 
-		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
-		if (valueSize > MAX_VALUE_SIZE) {
-			failureResponse = MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE);
+		int valueSize = request.totalBodyLength() - Short.toUnsignedInt(request.keyLength()) - Byte.toUnsignedInt(request.extrasLength());
+		if (valueSize > maxValueSize) {
+			failureResponse = MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + maxValueSize);
 		}
 		ByteBuf extras = request.extras();
 		ByteBuf flagSlice = extras.slice(0, 4);
@@ -445,12 +446,12 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	private Future<?> appendPrepend(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 
-		int valueSize = request.totalBodyLength() - request.keyLength() - request.extrasLength();
+		int valueSize = request.totalBodyLength() - Short.toUnsignedInt(request.keyLength()) - Byte.toUnsignedInt(request.extrasLength());
 
-		if (valueSize > MAX_VALUE_SIZE) {
-			failureResponse = MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + MAX_VALUE_SIZE);
+		if (valueSize > maxValueSize) {
+			failureResponse = MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, "Value too big.  Max Value is " + maxValueSize);
 		}
-		cacheValue = new HazelcastMemcacheCacheValue(valueSize, Unpooled.EMPTY_BUFFER, 0);
+		cacheValue = new HazelcastMemcacheCacheValue((int)valueSize, Unpooled.EMPTY_BUFFER, 0);
 		return null;
 	}
 
@@ -466,7 +467,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				}
 				IExecutorService executor = getExecutor();
 	
-				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture<HazelcastMemcacheMessage>)executor.submitToKeyOwner(new HazelcastAppendPrependCallable(authMsgHandler.getCacheName(), key, cacheValue, append), key);
+				ICompletableFuture<HazelcastMemcacheMessage> future = (ICompletableFuture<HazelcastMemcacheMessage>)executor.submitToKeyOwner(new HazelcastAppendPrependCallable(authMsgHandler.getCacheName(), key, cacheValue, append, maxValueSize), key);
 				
 				ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 					@Override

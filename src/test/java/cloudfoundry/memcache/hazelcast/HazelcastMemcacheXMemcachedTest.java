@@ -1,16 +1,20 @@
 package cloudfoundry.memcache.hazelcast;
 
+import static org.testng.Assert.assertTrue;
+
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import net.rubyeye.xmemcached.MemcachedClient;
 import net.rubyeye.xmemcached.XMemcachedClientBuilder;
 import net.rubyeye.xmemcached.command.BinaryCommandFactory;
 import net.rubyeye.xmemcached.utils.AddrUtil;
+import net.spy.memcached.internal.OperationFuture;
 
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
@@ -23,6 +27,7 @@ import cloudfoundry.memcache.MemcacheServer;
 import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
+import io.netty.util.CharsetUtil;
 
 import com.hazelcast.config.Config;
 
@@ -46,6 +51,7 @@ public class HazelcastMemcacheXMemcachedTest {
 
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
+		appConfig.getMemcache().setMaxValueSize(10485760);
 		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
 		
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
@@ -83,4 +89,5 @@ public class HazelcastMemcacheXMemcachedTest {
 		Assert.assertEquals(c.incr("nothingHereGet", 1, 2), 2);
 		Assert.assertEquals(c.incr("nothingHereGet", 1), 3);
 	}
+
 }

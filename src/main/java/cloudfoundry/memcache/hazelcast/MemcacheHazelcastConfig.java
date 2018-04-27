@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 import javax.validation.Valid;
+import javax.validation.constraints.Max;
+import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 
 import org.hibernate.validator.constraints.NotEmpty;
@@ -293,6 +295,7 @@ public class MemcacheHazelcastConfig {
 		@NotEmpty String testCache;
 		@NotNull Integer maxQueueSize;
 		@NotNull Integer requestRateLimit;
+		@NotNull @Max(value=Integer.MAX_VALUE-65535-256) @Min(value=1048576) Integer maxValueSize;
 		
 		public Integer getPort() {
 			return port;
@@ -335,6 +338,12 @@ public class MemcacheHazelcastConfig {
 		}
 		public void setRequestRateLimit(Integer requestRateLimit) {
 			this.requestRateLimit = requestRateLimit;
+		}
+		public Integer getMaxValueSize() {
+			return maxValueSize;
+		}
+		public void setMaxValueSize(Integer maxValueSize) {
+			this.maxValueSize = maxValueSize;
 		}
 	}
 }

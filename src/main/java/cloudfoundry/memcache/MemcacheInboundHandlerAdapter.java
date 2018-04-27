@@ -2,20 +2,18 @@ package cloudfoundry.memcache;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
 import io.netty.handler.codec.memcache.FullMemcacheMessage;
+import io.netty.handler.codec.memcache.LastMemcacheContent;
 import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.MemcacheObject;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheMessage;
@@ -28,6 +26,8 @@ import io.netty.util.concurrent.GenericFutureListener;
 
 public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	
+	private static final int MAX_KEY_SIZE = 250;
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheInboundHandlerAdapter.class);
 
 	private final MemcacheMsgHandlerFactory msgHandlerFactory;
@@ -37,6 +37,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	private final AuthMsgHandler authMsgHandler;
 	private final Deque<DelayedMessage> msgOrderQueue;
 	private final MemcacheStats memcacheStats;
+	private ResponseSender failureResponse;
 	DelayedMessage delayedMessage;
 	MemcacheServer memcacheServer;
 	private final int requestRateLimit;
@@ -99,14 +100,26 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				delayedMessage = new DelayedMessage(new MemcacheRequestKey(request));
 				msgOrderQueue.offer(delayedMessage);
 				opcode = request.opcode();
-				if(currentMsgHandler == null) {
-					if(getAuthMsgHandler().isAuthenticated()) {
-						currentMsgHandler = msgHandlerFactory.createMsgHandler(request, getAuthMsgHandler());
-					} else {
-						currentMsgHandler = new NoAuthMemcacheMsgHandler(request);
+				memcacheStats.logHit(opcode, getCurrentUser());
+				if(Short.toUnsignedInt(((BinaryMemcacheRequest) msg).keyLength()) > MAX_KEY_SIZE) {
+					LOGGER.debug("Key too big.  Skipping this request.");
+					failureResponse = MemcacheUtils.returnFailure(opcode, request.opaque(), BinaryMemcacheResponseStatus.E2BIG, "Key too big.  Max Key is " + MAX_KEY_SIZE);
+					return;
+				} else {
+					if(currentMsgHandler == null) {
+						if(getAuthMsgHandler().isAuthenticated()) {
+							currentMsgHandler = msgHandlerFactory.createMsgHandler(request, getAuthMsgHandler());
+						} else {
+							currentMsgHandler = new NoAuthMemcacheMsgHandler(request);
+						}
 					}
-					memcacheStats.logHit(opcode, getCurrentUser());
 				}
+			} else if(failureResponse != null) {
+				if(msg instanceof LastMemcacheContent) {
+					completeRequest(failureResponse.send(ctx));
+					return;
+				}
+				return;
 			} else if(currentMsgHandler == null) {
 				return;
 			}
@@ -466,6 +479,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		currentMsgHandler = null;
 		opcode = -1;
 		delayedMessage = null;
+		failureResponse = null;
 	}
 
 	@Override

@@ -58,8 +58,10 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	private ScheduledExecutorService memoryTrimmerExecutor;
 	private ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(4);
 	private volatile boolean shuttingDown = false;
+	private final MemcacheHazelcastConfig appConfig;
 
 	public HazelcastMemcacheMsgHandlerFactory(MemcacheServer memcacheServer, MemcacheHazelcastConfig appConfig) {
+		this.appConfig = appConfig;
 		Config config = new Config();
 		for (Map.Entry<String, MemcacheHazelcastConfig.Plan> plan : appConfig.getPlans().entrySet()) {
 			LOGGER.info("Configuring plan: " + plan.getKey());
@@ -269,7 +271,7 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 	}
 
 	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler) {
-		return new HazelcastMemcacheMsgHandler(request, authMsgHandler, instance);
+		return new HazelcastMemcacheMsgHandler(request, authMsgHandler, instance, appConfig.getMemcache().getMaxValueSize());
 	}
 	
 	public boolean isCacheValid(String cacheName) {
