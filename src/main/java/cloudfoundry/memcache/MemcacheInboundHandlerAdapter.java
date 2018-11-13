@@ -3,6 +3,7 @@ package cloudfoundry.memcache;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -49,6 +50,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	private long loggableRequestRate = 0;
 	private boolean triggeredQueueLimit = false;
 	private long loggableQueueSize = 0;
+	ScheduledFuture<?> rateMonitoringScheduler;
 	
 
 	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler, int queueSizeLimit, int requestRateLimit, MemcacheServer memcacheServer, MemcacheStats memcacheStats) {
@@ -59,7 +61,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		this.requestRateLimit = requestRateLimit;
 		this.memcacheStats = memcacheStats;
 		msgOrderQueue = new ArrayDeque<>(queueSizeLimit+100);
-		msgHandlerFactory.getScheduledExecutorService().scheduleAtFixedRate(() -> {
+		rateMonitoringScheduler = msgHandlerFactory.getScheduledExecutorService().scheduleAtFixedRate(() -> {
 			if(LOGGER.isDebugEnabled()) {
 				LOGGER.debug("Current load rate for "+getCurrentUser()+" is "+loggableRequestRate+" requests/10sec");
 				LOGGER.debug("Current request queue size for "+getCurrentUser()+" is "+loggableQueueSize);
@@ -82,6 +84,11 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		ctx.channel().closeFuture().addListener(new GenericFutureListener<io.netty.util.concurrent.Future<Void>>() {
 			@Override
 			public void operationComplete(io.netty.util.concurrent.Future<Void> future) throws Exception {
+				try {
+					rateMonitoringScheduler.cancel(false);
+				} catch(Throwable t) {
+					LOGGER.error("Rate monitoring scheduled task.", t);
+				}
 				clearDelayedMessages();
 			}
 		});
