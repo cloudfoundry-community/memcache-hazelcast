@@ -1,19 +1,15 @@
 package cloudfoundry.memcache.hazelcast;
 
-import java.net.ServerSocket;
-import java.util.Collections;
-
-import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-
-import com.hazelcast.config.Config;
-
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
 import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
+import java.net.ServerSocket;
+import java.util.Collections;
+import org.testng.Assert;
+import org.testng.annotations.AfterClass;
+import org.testng.annotations.BeforeClass;
+import org.testng.annotations.Test;
 
 public class HazelcastMemcapableTest {
 
