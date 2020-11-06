@@ -1,6 +1,9 @@
 package cloudfoundry.memcache;
 
-import static org.testng.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -9,13 +12,11 @@ import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheOpcodes;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheRequest;
-
 import java.util.UUID;
-
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.easymock.EasyMock;
-import org.testng.annotations.Test;
+import org.junit.Test;
 
 public class SecretKeyAuthMsgHandlerTest {
 

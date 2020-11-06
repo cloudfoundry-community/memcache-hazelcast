@@ -12,61 +12,49 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheServerCodec;
 
-public class MemcacheServer {
+public class MemcacheServer implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheServer.class);
-	
-	private EventLoopGroup bossGroup;
-	private EventLoopGroup workerGroup;
-	private boolean started = false;
-	private final int port;
-	private final AuthMsgHandlerFactory authMsgHandlerFactory;
-	private final MemcacheStats memcacheStats;
-	private final int queueSizeLimit;
-	private final int requestRateLimit;
 
-	public MemcacheServer(int port, AuthMsgHandlerFactory authMsgHandlerFactory, int queueSizeLimit, int requestRateLimit, MemcacheStats memcacheStats) {
-		this.port = port;
-		this.authMsgHandlerFactory = authMsgHandlerFactory;
-		this.queueSizeLimit = queueSizeLimit;
-		this.memcacheStats = memcacheStats;
-		this.requestRateLimit = requestRateLimit;
-	}
+	private final EventLoopGroup bossGroup;
+	private final EventLoopGroup workerGroup;
 
-	public void start(MemcacheMsgHandlerFactory msgHandlerFactory) {
+	public MemcacheServer(MemcacheMsgHandlerFactory msgHandlerFactory, int port,
+			AuthMsgHandlerFactory authMsgHandlerFactory, int queueSizeLimit, int requestRateLimit,
+			MemcacheStats memcacheStats) throws InterruptedException {
 		bossGroup = new NioEventLoopGroup(1);
-		workerGroup = new NioEventLoopGroup();
-
-		started = true;
-
-		ServerBootstrap b = new ServerBootstrap();
-		b.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
-				.childHandler(new ChannelInitializer<SocketChannel>() {
-					@Override
-					protected void initChannel(SocketChannel ch) throws Exception {
-						ch.pipeline().addFirst("memcache", new BinaryMemcacheServerCodec());
-						ch.pipeline().addLast("memcache-handler", new MemcacheInboundHandlerAdapter(msgHandlerFactory, authMsgHandlerFactory.createAuthMsgHandler(msgHandlerFactory), queueSizeLimit, requestRateLimit, MemcacheServer.this, memcacheStats));
-					}
-				})
-				.childOption(ChannelOption.TCP_NODELAY, true)
-				.childOption(ChannelOption.SO_KEEPALIVE, true)
-				.childOption(ChannelOption.AUTO_READ, false);
-
 		try {
-			b.bind(port).sync();
-		} catch (InterruptedException e) {
-			throw new RuntimeException("Binding to port interrupted.", e);
+			workerGroup = new NioEventLoopGroup();
+		} catch (Exception e) {
+			bossGroup.shutdownGracefully();
+			throw e;
 		}
-		LOGGER.info("Memcached server started on port: "+port);
+		try {
+			new ServerBootstrap().group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
+					.childHandler(new ChannelInitializer<SocketChannel>() {
+						@Override
+						protected void initChannel(SocketChannel ch) throws Exception {
+							ch.pipeline().addFirst("memcache", new BinaryMemcacheServerCodec());
+							ch.pipeline().addLast("memcache-handler",
+									new MemcacheInboundHandlerAdapter(msgHandlerFactory,
+											authMsgHandlerFactory.createAuthMsgHandler(msgHandlerFactory),
+											queueSizeLimit, requestRateLimit, MemcacheServer.this, memcacheStats));
+						}
+					}).childOption(ChannelOption.TCP_NODELAY, true).childOption(ChannelOption.SO_KEEPALIVE, true)
+					.childOption(ChannelOption.AUTO_READ, false).bind(port).sync();
+		} catch (Exception e) {
+			bossGroup.shutdownGracefully();
+			workerGroup.shutdownGracefully();
+			throw e;
+		}
+		LOGGER.info("Memcached server started on port: {}", port);
 	}
-	
-	public void shutdown() {
-		if (started) {
-			LOGGER.info("Shutting down memcache server.");
-			LOGGER.info("Shutting down boss thread group.");
-			bossGroup.shutdownGracefully().awaitUninterruptibly();
-			LOGGER.info("Shutting down worker thread group.");
-			workerGroup.shutdownGracefully().awaitUninterruptibly();
-		}
-		started = false;
+
+	@Override
+	public void close() {
+		LOGGER.info("Shutting down memcache server.");
+		LOGGER.info("Shutting down boss thread group.");
+		bossGroup.shutdownGracefully().awaitUninterruptibly();
+		LOGGER.info("Shutting down worker thread group.");
+		workerGroup.shutdownGracefully().awaitUninterruptibly();
 	}
 }

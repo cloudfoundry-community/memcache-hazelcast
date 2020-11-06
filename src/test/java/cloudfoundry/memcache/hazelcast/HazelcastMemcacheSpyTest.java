@@ -1,68 +1,54 @@
 package cloudfoundry.memcache.hazelcast;
 
 import static org.junit.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import static org.junit.Assert.assertTrue;
 
+import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
+import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.MemcacheStats;
+import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import java.net.ServerSocket;
 import java.net.SocketAddress;
-import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
-
 import net.spy.memcached.AddrUtil;
 import net.spy.memcached.ConnectionFactoryBuilder;
-import net.spy.memcached.DefaultConnectionFactory;
 import net.spy.memcached.ConnectionFactoryBuilder.Protocol;
 import net.spy.memcached.MemcachedClient;
 import net.spy.memcached.auth.AuthDescriptor;
 import net.spy.memcached.auth.PlainCallbackHandler;
-import net.spy.memcached.internal.GetFuture;
-import net.spy.memcached.internal.OperationCompletionListener;
 import net.spy.memcached.internal.OperationFuture;
 import net.spy.memcached.ops.StatusCode;
-import net.spy.memcached.transcoders.SerializingTranscoder;
-
 import org.apache.commons.lang.RandomStringUtils;
-import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-
-import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
-import cloudfoundry.memcache.MemcacheMsgHandlerFactoryAuthStub;
-import cloudfoundry.memcache.MemcacheServer;
-import cloudfoundry.memcache.MemcacheStats;
-import cloudfoundry.memcache.SecretKeyAuthMsgHandler;
-import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
-import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
-import io.netty.util.CharsetUtil;
-
-import com.hazelcast.config.Config;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 
 public class HazelcastMemcacheSpyTest {
 
-	MemcachedClient c;
-	MemcacheMsgHandlerFactory factory;
+	static MemcachedClient c;
+	static HazelcastMemcacheMsgHandlerFactory factory;
+	static MemcacheServer server;
 
 	@BeforeClass
-	public void setup() throws Exception {
+	public static void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
 		int localPort = 54913;
 		try (ServerSocket s = new ServerSocket(0)) {
 			localPort = s.getLocalPort();
 		}
 
-		System.out.println("Localport: "+localPort);
-		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 1000, 1000, new MemcacheStats());
-
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		appConfig.getMemcache().setMaxValueSize(10485760);
-		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
+		factory = new HazelcastMemcacheMsgHandlerFactory(appConfig);
+
+		System.out.println("Localport: "+localPort);
+		server = new MemcacheServer(factory, localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 1000, 1000, new MemcacheStats());
+
 
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
 			Thread.sleep(1000);
@@ -79,9 +65,10 @@ public class HazelcastMemcacheSpyTest {
 	}
 	
 	@AfterClass
-	public void after() throws Exception {
+	public static void after() throws Exception {
 		c.shutdown();
-		factory.shutdown();
+		server.close();
+		factory.close();
 	}
 
 	@Test

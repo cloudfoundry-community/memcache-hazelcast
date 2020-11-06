@@ -1,19 +1,16 @@
 package cloudfoundry.memcache.hazelcast;
 
+import com.hazelcast.config.EvictionPolicy;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 import javax.validation.Valid;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
-
 import org.hibernate.validator.constraints.NotEmpty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
-
-import com.hazelcast.config.EvictionPolicy;
 
 @Component
 @ConfigurationProperties
@@ -153,7 +150,6 @@ public class MemcacheHazelcastConfig {
 	public static class Hazelcast {
 		@NotNull Integer port;
 		@NotNull Integer localMemberSafeTimeout;
-		@NotNull Integer minimumClusterMembers;
 		@NotNull Integer executorPoolSize;
 		@NotNull Boolean enableMemoryTrimmer = Boolean.FALSE;
 		@NotNull Long maxCacheSize;
@@ -182,12 +178,6 @@ public class MemcacheHazelcastConfig {
 		}
 		public void setLocalMemberSafeTimeout(Integer localMemberSafeTimeout) {
 			this.localMemberSafeTimeout = localMemberSafeTimeout;
-		}
-		public Integer getMinimumClusterMembers() {
-			return minimumClusterMembers;
-		}
-		public void setMinimumClusterMembers(Integer minimumClusterMembers) {
-			this.minimumClusterMembers = minimumClusterMembers;
 		}
 		public Integer getExecutorPoolSize() {
 			return executorPoolSize;

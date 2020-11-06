@@ -1,15 +1,5 @@
 package cloudfoundry.memcache;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -24,6 +14,13 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.GenericFutureListener;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	
@@ -362,13 +359,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				}
 			}
 		} catch(IllegalStateException e) {
-			LOGGER.error("IllegalStateException thrown.  Shutting down the server because we don't know the state we're in.", e);
-			try {
-				msgHandlerFactory.shutdown();
-			} catch(Throwable t) { }
-			try {
-				memcacheServer.shutdown();
-			} catch(Throwable t) { }
+			ShutdownUtils.gracefullyExit("IllegalStateException thrown.  Shutting down the server because we don't know the state we're in.", (byte)99, e);
 		} catch(Throwable e) {
 			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.  Current User: "+getCurrentUser(), e);
 			try {

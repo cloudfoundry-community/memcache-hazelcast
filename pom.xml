@@ -32,6 +32,10 @@
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>javax.servlet</groupId>
 			<artifactId>javax.servlet-api</artifactId>
 			<scope>compile</scope>
@@ -85,12 +89,6 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>org.testng</groupId>
-			<artifactId>testng</artifactId>
-			<version>6.8.21</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
 			<groupId>org.easymock</groupId>
 			<artifactId>easymock</artifactId>
 			<version>3.3.1</version>
@@ -104,6 +102,11 @@
 			<groupId>commons-lang</groupId>
 			<artifactId>commons-lang</artifactId>
 			<version>2.6</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 	<dependencyManagement>
