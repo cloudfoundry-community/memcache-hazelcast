@@ -19,7 +19,6 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-
 public class HazelcastMemcacheXMemcachedTest {
 
 	static MemcachedClient c;

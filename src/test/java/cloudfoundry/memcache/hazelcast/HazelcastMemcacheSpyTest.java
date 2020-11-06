@@ -26,7 +26,6 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-
 public class HazelcastMemcacheSpyTest {
 
 	static MemcachedClient c;
