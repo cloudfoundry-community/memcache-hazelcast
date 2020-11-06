@@ -1,38 +1,21 @@
 package cloudfoundry.memcache.hazelcast;
 
-import static org.junit.Assert.assertEquals;
-
+import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
+import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.MemcacheStats;
+import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
 import java.net.ServerSocket;
-import java.net.SocketAddress;
 import java.util.Collections;
-import java.util.Map;
-import java.util.Random;
-
 import net.spy.memcached.AddrUtil;
 import net.spy.memcached.ConnectionFactoryBuilder;
 import net.spy.memcached.ConnectionFactoryBuilder.Protocol;
 import net.spy.memcached.MemcachedClient;
 import net.spy.memcached.auth.AuthDescriptor;
 import net.spy.memcached.auth.PlainCallbackHandler;
-import net.spy.memcached.internal.OperationCompletionListener;
-import net.spy.memcached.internal.OperationFuture;
-import net.spy.memcached.ops.StatusCode;
-import net.spy.memcached.transcoders.SerializingTranscoder;
-
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
-
-import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
-import cloudfoundry.memcache.MemcacheMsgHandlerFactoryAuthStub;
-import cloudfoundry.memcache.MemcacheServer;
-import cloudfoundry.memcache.MemcacheStats;
-import cloudfoundry.memcache.SecretKeyAuthMsgHandler;
-import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
-import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
-
-import com.hazelcast.config.Config;
 
 
 public class HazelcastMemcacheStatsTest {

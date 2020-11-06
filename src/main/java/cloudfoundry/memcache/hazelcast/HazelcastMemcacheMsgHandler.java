@@ -37,11 +37,24 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
+import io.netty.util.concurrent.GenericFutureListener;
 
 
 public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastMemcacheMsgHandler.class);
+
+	public static final GenericFutureListener<io.netty.util.concurrent.Future<Void>> FAILURE_LOGGING_LISTENER =
+			future -> {
+				if(LOGGER.isDebugEnabled()) {
+					try {
+						future.get();
+					} catch (Exception e) {
+						LOGGER.debug("Error closing Channel. ", e);
+					}
+				}
+			};
+
 	final HazelcastInstance instance;
 	HazelcastMemcacheCacheValue cacheValue;
 	final AuthMsgHandler authMsgHandler;
@@ -409,11 +422,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		if (request.opcode() == BinaryMemcacheOpcodes.QUIT) {
 			MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
 		}
-		try {
-			ctx.channel().close().await();
-		} catch (InterruptedException e) {
-			throw new RuntimeException(e);
-		}
+		ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 		return CompletedFuture.INSTANCE;
 	}
 

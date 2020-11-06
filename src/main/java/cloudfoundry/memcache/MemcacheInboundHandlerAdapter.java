@@ -1,15 +1,5 @@
 package cloudfoundry.memcache;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -24,12 +14,30 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 import io.netty.util.ReferenceCountUtil;
 import io.netty.util.concurrent.GenericFutureListener;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	
 	private static final int MAX_KEY_SIZE = 250;
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheInboundHandlerAdapter.class);
+
+	public static final GenericFutureListener<io.netty.util.concurrent.Future<Void>> FAILURE_LOGGING_LISTENER = future -> {
+		if(LOGGER.isDebugEnabled()) {
+			try {
+				future.get();
+			} catch (Exception e) {
+				LOGGER.debug("Error closing Channel. ", e);
+			}
+		}
+	};
 
 	private final MemcacheMsgHandlerFactory msgHandlerFactory;
 
@@ -84,6 +92,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		ctx.channel().closeFuture().addListener(new GenericFutureListener<io.netty.util.concurrent.Future<Void>>() {
 			@Override
 			public void operationComplete(io.netty.util.concurrent.Future<Void> future) throws Exception {
+				LOGGER.info("Channel Closed for user: "+getCurrentUser());
 				try {
 					rateMonitoringScheduler.cancel(false);
 				} catch(Throwable t) {
@@ -341,11 +350,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, "We don't support any auth mechanisms that require a step.").send(ctx);
 				} else {
 					LOGGER.error("Received Non memcache request with SASL_STEP optcode.  This is an invalid state. Closing connection.");
-					try {
-						ctx.channel().close().await(1, TimeUnit.SECONDS);
-					} catch(Exception e) {
-						LOGGER.debug("Failure closing connection. ", e);
-					}
+					ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 				}
 				break;
 			default:
@@ -354,11 +359,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, "Unable to handle command: 0x"+Integer.toHexString(opcode)).send(ctx);
 				} else {
 					LOGGER.error("Received unsupported opcode as a non request.  This is an invalid state. Closing connection.");
-					try {
-						ctx.channel().close().await(1, TimeUnit.SECONDS);
-					} catch(Exception e) {
-						LOGGER.debug("Failure closing connection. ", e);
-					}
+					ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 				}
 			}
 		} catch(IllegalStateException e) {
@@ -371,11 +372,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			} catch(Throwable t) { }
 		} catch(Throwable e) {
 			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.  Current User: "+getCurrentUser(), e);
-			try {
-				ctx.channel().close().await(1, TimeUnit.SECONDS);
-			} catch(Exception e2) {
-				LOGGER.debug("Failure closing connection. ", e2);
-			}
+			ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 		} finally {
 			ReferenceCountUtil.release(msg);
 		}
@@ -409,11 +406,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		ctx.flush();
 		if(!msgOrderQueue.isEmpty() && System.currentTimeMillis()-msgOrderQueue.peek().getCreated() > 60000) {
 			LOGGER.warn("Message at bottom of queue has been in the queue longer than 1 mintue.  Terminating the connection.  User="+getCurrentUser());
-			try {
-				ctx.channel().close().await(1, TimeUnit.SECONDS);
-			} catch(Exception e) {
-				LOGGER.debug("Failure closing connection. ", e);
-			}
+			ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 			return;
 		}
 		readIfNotRateLimited(ctx);
@@ -491,16 +484,15 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+		if(cause instanceof CancellationException) {
+			return;
+		}
 		if(cause != null && cause.getMessage() != null && cause.getMessage().contains("Connection reset")) {
 			LOGGER.info("Channel for "+getCurrentUser()+" Unexpectedly reset.");
 		} else {
 			LOGGER.error("Unexpected Error for user: "+getCurrentUser(), cause);
 		}
-		try {
-			ctx.channel().close().await(1, TimeUnit.SECONDS);
-		} catch(Exception e) {
-			LOGGER.debug("Failure closing connection. ", e);
-		}
+		ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 	}
 
 	private void delayMsg(MemcacheRequestKey key, BinaryMemcacheMessage memcacheMessage, ChannelPromise promise) {

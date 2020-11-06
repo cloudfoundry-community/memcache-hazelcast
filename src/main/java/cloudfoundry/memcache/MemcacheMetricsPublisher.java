@@ -1,14 +1,11 @@
 package cloudfoundry.memcache;
 
+import cf.dropsonde.metron.MetronClient;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import cf.dropsonde.metron.MetronClient;
 
 @Component
 public class MemcacheMetricsPublisher {

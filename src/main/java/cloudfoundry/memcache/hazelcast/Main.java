@@ -1,5 +1,11 @@
 package cloudfoundry.memcache.hazelcast;
 
+import cf.dropsonde.spring.boot.EnableMetronClient;
+import cloudfoundry.memcache.AuthMsgHandlerFactory;
+import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.MemcacheStats;
+import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
+import cloudfoundry.memcache.web.HttpBasicAuthenticator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
@@ -7,14 +13,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.scheduling.annotation.EnableScheduling;
-
-import cf.dropsonde.spring.boot.EnableMetronClient;
-import cloudfoundry.memcache.AuthMsgHandlerFactory;
-import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
-import cloudfoundry.memcache.MemcacheServer;
-import cloudfoundry.memcache.MemcacheStats;
-import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
-import cloudfoundry.memcache.web.HttpBasicAuthenticator;
 
 @SpringBootApplication
 @ComponentScan("cloudfoundry.memcache")

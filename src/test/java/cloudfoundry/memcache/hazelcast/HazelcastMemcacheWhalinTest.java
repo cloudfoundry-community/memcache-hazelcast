@@ -1,31 +1,22 @@
 package cloudfoundry.memcache.hazelcast;
 
-import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
+import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
+import cloudfoundry.memcache.MemcacheServer;
+import cloudfoundry.memcache.MemcacheStats;
+import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
+import com.schooner.MemCached.AuthInfo;
+import com.schooner.MemCached.SchoonerSockIOPool;
+import com.whalin.MemCached.MemCachedClient;
 import java.net.ServerSocket;
 import java.util.Collections;
-import java.util.Random;
-
 import org.apache.commons.lang.RandomStringUtils;
 import org.testng.Assert;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
-
-import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
-import cloudfoundry.memcache.MemcacheMsgHandlerFactoryAuthStub;
-import cloudfoundry.memcache.MemcacheServer;
-import cloudfoundry.memcache.MemcacheStats;
-import cloudfoundry.memcache.SecretKeyAuthMsgHandlerFactory;
-import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
-import io.netty.util.CharsetUtil;
-
-import com.hazelcast.config.Config;
-import com.schooner.MemCached.AuthInfo;
-import com.schooner.MemCached.SchoonerSockIOPool;
-import com.whalin.MemCached.MemCachedClient;
 
 
 public class HazelcastMemcacheWhalinTest {
