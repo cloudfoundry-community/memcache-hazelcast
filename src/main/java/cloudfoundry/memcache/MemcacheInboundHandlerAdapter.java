@@ -92,11 +92,10 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		ctx.channel().closeFuture().addListener(new GenericFutureListener<io.netty.util.concurrent.Future<Void>>() {
 			@Override
 			public void operationComplete(io.netty.util.concurrent.Future<Void> future) throws Exception {
-				LOGGER.info("Channel Closed for user: "+getCurrentUser());
 				try {
 					rateMonitoringScheduler.cancel(false);
 				} catch(Throwable t) {
-					LOGGER.error("Rate monitoring scheduled task.", t);
+					LOGGER.error("Error cancelling rate monitoring scheduled task.", t);
 				}
 				clearDelayedMessages();
 			}
@@ -364,6 +363,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			}
 		} catch(IllegalStateException e) {
 			ShutdownUtils.gracefullyExit("IllegalStateException thrown.  Shutting down the server because we don't know the state we're in.", (byte)99, e);
+			ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 		} catch(Throwable e) {
 			LOGGER.error("Error while invoking MemcacheMsgHandler.  Closing the Channel in case we're in an odd state.  Current User: "+getCurrentUser(), e);
 			ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
