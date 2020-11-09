@@ -12,34 +12,35 @@ import net.spy.memcached.ConnectionFactoryBuilder.Protocol;
 import net.spy.memcached.MemcachedClient;
 import net.spy.memcached.auth.AuthDescriptor;
 import net.spy.memcached.auth.PlainCallbackHandler;
-import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 public class HazelcastMemcacheStatsTest {
 
-	MemcachedClient c;
-	MemcacheMsgHandlerFactory factory;
-	private MemcacheStats memcacheStats;
+	static MemcachedClient c;
+	static HazelcastMemcacheMsgHandlerFactory factory;
+	static MemcacheStats memcacheStats;
+	static MemcacheServer server;
 
 	@BeforeClass
-	public void setup() throws Exception {
+	public static void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
 		int localPort = 54913;
 		try (ServerSocket s = new ServerSocket(0)) {
 			localPort = s.getLocalPort();
 		}
 
-		System.out.println("Localport: "+localPort);
-		memcacheStats = new MemcacheStats();
-		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, memcacheStats);
-
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		appConfig.getMemcache().setMaxValueSize(10485760);
-		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
+		factory = new HazelcastMemcacheMsgHandlerFactory(appConfig);
+
+		System.out.println("Localport: "+localPort);
+		memcacheStats = new MemcacheStats();
+		server = new MemcacheServer(factory, localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, memcacheStats);
+
 
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
 			Thread.sleep(1000);
@@ -56,9 +57,10 @@ public class HazelcastMemcacheStatsTest {
 	}
 	
 	@AfterClass
-	public void after() throws Exception {
+	public static void after() throws Exception {
 		c.shutdown();
-		factory.shutdown();
+		server.close();
+		factory.close();
 	}
 
 	@Test

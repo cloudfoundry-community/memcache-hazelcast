@@ -1,7 +1,7 @@
 package cloudfoundry.memcache.hazelcast;
 
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import cloudfoundry.memcache.MemcacheMsgHandlerFactory;
 import cloudfoundry.memcache.MemcacheServer;
@@ -13,20 +13,20 @@ import com.whalin.MemCached.MemCachedClient;
 import java.net.ServerSocket;
 import java.util.Collections;
 import org.apache.commons.lang.RandomStringUtils;
-import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 public class HazelcastMemcacheWhalinTest {
 
-	MemCachedClient c;
-	MemcacheMsgHandlerFactory factory;
-	SchoonerSockIOPool pool;
+	static MemCachedClient c;
+	static HazelcastMemcacheMsgHandlerFactory factory;
+	static SchoonerSockIOPool pool;
+	static MemcacheServer server;
 
 	@BeforeClass
-	public void setup() throws Exception {
+	public static void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
 
 		int localPort = 54913;
@@ -35,11 +35,12 @@ public class HazelcastMemcacheWhalinTest {
 		}
 		System.out.println("Localport: "+localPort);
 
-		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, new MemcacheStats());
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		appConfig.getMemcache().setMaxValueSize(10485760);
-		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
+		factory = new HazelcastMemcacheMsgHandlerFactory(appConfig);
+
+		server = new MemcacheServer(factory, localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, new MemcacheStats());
 
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
 			Thread.sleep(1000);
@@ -87,9 +88,10 @@ public class HazelcastMemcacheWhalinTest {
 	}
 	
 	@AfterClass
-	public void after() throws Exception {
+	public static void after() throws Exception {
 		pool.shutDown();
-		factory.shutdown();
+		server.close();
+		factory.close();
 	}
 
 	@Test

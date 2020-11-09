@@ -6,18 +6,19 @@ import cloudfoundry.memcache.MemcacheStats;
 import cloudfoundry.memcache.StubAuthMsgHandlerFactory;
 import java.net.ServerSocket;
 import java.util.Collections;
-import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 public class HazelcastMemcapableTest {
 
-	MemcacheMsgHandlerFactory factory;
-	int localPort;
+	static HazelcastMemcacheMsgHandlerFactory factory;
+	static MemcacheServer server;
+	static int localPort;
 
 	@BeforeClass
-	public void setup() throws Exception {
+	public static void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
 
 		localPort = 54913;
@@ -25,13 +26,14 @@ public class HazelcastMemcapableTest {
 			localPort = s.getLocalPort();
 		}
 
-		System.out.println("Localport: " + localPort);
-		MemcacheServer server = new MemcacheServer(localPort, new StubAuthMsgHandlerFactory(), 1000, 1000, new MemcacheStats());
-
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		appConfig.getMemcache().setMaxValueSize(10485760);
-		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
+		factory = new HazelcastMemcacheMsgHandlerFactory(appConfig);
+
+		System.out.println("Localport: " + localPort);
+		server = new MemcacheServer(factory, localPort, new StubAuthMsgHandlerFactory(), 1000, 1000, new MemcacheStats());
+
 
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
 			Thread.sleep(1000);
@@ -39,8 +41,9 @@ public class HazelcastMemcapableTest {
 	}
 
 	@AfterClass
-	public void after() throws Exception {
-		factory.shutdown();
+	public static void after() throws Exception {
+		server.close();
+		factory.close();
 	}
 
 	@Test

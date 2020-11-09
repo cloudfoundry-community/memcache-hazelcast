@@ -17,14 +17,6 @@ public class MemcacheMsgHandlerFactoryAuthStub implements MemcacheMsgHandlerFact
 	}
 
 	@Override
-	public void shutdownNow() {
-	}
-
-	@Override
-	public void shutdown() {
-	}
-
-	@Override
 	public boolean isCacheValid(String cacheName) {
 		return valid;
 	}

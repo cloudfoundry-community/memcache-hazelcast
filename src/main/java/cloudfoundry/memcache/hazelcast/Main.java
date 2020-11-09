@@ -23,13 +23,15 @@ public class Main {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Main.class);
 
 	@Bean
-	HazelcastMemcacheMsgHandlerFactory hazelcastconfig(MemcacheServer memcacheServer, MemcacheHazelcastConfig appConfig) {
-		return new HazelcastMemcacheMsgHandlerFactory(memcacheServer, appConfig);
+	HazelcastMemcacheMsgHandlerFactory hazelcastconfig(MemcacheHazelcastConfig appConfig) {
+		return new HazelcastMemcacheMsgHandlerFactory(appConfig);
 	}
 
 	@Bean
 	AuthMsgHandlerFactory authHandlerFactory(MemcacheHazelcastConfig config) {
-		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey(), config.getMemcache().getTestUser(), config.getMemcache().getTestPassword(), config.getMemcache().getTestCache());
+		return new SecretKeyAuthMsgHandlerFactory(config.getMemcache().getSecretKey(),
+				config.getMemcache().getTestUser(), config.getMemcache().getTestPassword(),
+				config.getMemcache().getTestCache());
 	}
 
 	@Bean
@@ -38,11 +40,11 @@ public class Main {
 	}
 
 	@Bean
-	MemcacheServer memcacheServer(AuthMsgHandlerFactory authFactory,
-			MemcacheHazelcastConfig config, MemcacheStats memcacheStats) {
-		MemcacheServer server = new MemcacheServer(config.getMemcache().getPort(), authFactory,
+	MemcacheServer memcacheServer(HazelcastMemcacheMsgHandlerFactory hazelcastHandlerFactory,
+			AuthMsgHandlerFactory authFactory, MemcacheHazelcastConfig config, MemcacheStats memcacheStats)
+			throws Exception {
+		return new MemcacheServer(hazelcastHandlerFactory, config.getMemcache().getPort(), authFactory,
 				config.getMemcache().getMaxQueueSize(), config.getMemcache().getRequestRateLimit(), memcacheStats);
-		return server;
 	}
 
 	public static void main(String[] args) throws Exception {

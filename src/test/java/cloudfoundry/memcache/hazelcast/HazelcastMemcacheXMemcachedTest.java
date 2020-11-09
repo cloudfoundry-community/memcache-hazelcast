@@ -14,19 +14,19 @@ import net.rubyeye.xmemcached.MemcachedClient;
 import net.rubyeye.xmemcached.XMemcachedClientBuilder;
 import net.rubyeye.xmemcached.command.BinaryCommandFactory;
 import net.rubyeye.xmemcached.utils.AddrUtil;
-import org.testng.Assert;
-import org.testng.annotations.AfterClass;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.Test;
-
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 public class HazelcastMemcacheXMemcachedTest {
 
-	MemcachedClient c;
-	MemcacheMsgHandlerFactory factory;
+	static MemcachedClient c;
+	static HazelcastMemcacheMsgHandlerFactory factory;
+	static MemcacheServer server;
 
 	@BeforeClass
-	public void setup() throws Exception {
+	public static void setup() throws Exception {
 		System.getProperties().put("io.netty.leakDetectionLevel", "paranoid");
 
 		int localPort = 54913;
@@ -34,13 +34,14 @@ public class HazelcastMemcacheXMemcachedTest {
 			localPort = s.getLocalPort();
 		}
 
-		System.out.println("Localport: "+localPort);
-		MemcacheServer server = new MemcacheServer(localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, new MemcacheStats());
-
 		MemcacheHazelcastConfig appConfig = new MemcacheHazelcastConfig();
 		appConfig.getHazelcast().getMachines().put("local", Collections.singletonList("127.0.0.1"));
 		appConfig.getMemcache().setMaxValueSize(10485760);
-		factory = new HazelcastMemcacheMsgHandlerFactory(server, appConfig);
+		factory = new HazelcastMemcacheMsgHandlerFactory(appConfig);
+
+		System.out.println("Localport: "+localPort);
+		server = new MemcacheServer(factory, localPort, new SecretKeyAuthMsgHandlerFactory("key", "test", "test", "test"), 100, 1000, new MemcacheStats());
+
 		
 		while(!factory.status().equals(MemcacheMsgHandlerFactory.OK_STATUS)) {
 			Thread.sleep(1000);
@@ -59,9 +60,10 @@ public class HazelcastMemcacheXMemcachedTest {
 	}
 	
 	@AfterClass
-	public void after() throws Exception {
+	public static void after() throws Exception {
 		c.shutdown();
-		factory.shutdown();
+		server.close();
+		factory.close();
 	}
 
 	@Test
