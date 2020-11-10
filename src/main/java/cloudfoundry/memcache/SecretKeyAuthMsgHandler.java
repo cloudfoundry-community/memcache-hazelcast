@@ -10,11 +10,9 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
-
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.Future;
-
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.digest.DigestUtils;
 
@@ -31,9 +29,9 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	private final String testPassword;
 	private final String testCacheName;
 	private final MemcacheMsgHandlerFactory factory;
-	
 
-	public SecretKeyAuthMsgHandler(MemcacheMsgHandlerFactory factory, String key, String testUser, String testPassword, String testCacheName) {
+	public SecretKeyAuthMsgHandler(MemcacheMsgHandlerFactory factory, String key, String testUser, String testPassword,
+			String testCacheName) {
 		this.key = key;
 		this.testUser = testUser;
 		this.testPassword = testPassword;
@@ -45,11 +43,8 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	public Future<?> listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		FullBinaryMemcacheResponse response;
-		try {
-			response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled.wrappedBuffer(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.getBytes("US-ASCII")));
-		} catch (UnsupportedEncodingException e) {
-			throw new RuntimeException(e);
-		}
+		response = new DefaultFullBinaryMemcacheResponse(null, null, Unpooled
+				.wrappedBuffer(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.getBytes(StandardCharsets.US_ASCII)));
 		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 		response.setOpcode(request.opcode());
 		response.setOpaque(request.opaque());
@@ -62,7 +57,10 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	public Future<?> startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		if (!SUPPORTED_SASL_MECHS.contains(new String(Unpooled.copiedBuffer(request.key()).array()))) {
-			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Authentication Mechanism: "+new String(Unpooled.copiedBuffer(request.key()).array())).send(ctx);
+			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque,
+					BinaryMemcacheResponseStatus.AUTH_ERROR,
+					"Invalid Authentication Mechanism: " + new String(Unpooled.copiedBuffer(request.key()).array()))
+					.send(ctx);
 		}
 		opaque = request.opaque();
 		return null;
@@ -76,13 +74,13 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 		String password = MemcacheUtils.extractSaslPassword(arrayContent);
 		boolean validPassword = validatePassword(username, password);
 		if (validPassword) {
-			if(testUser.equals(username)) {
+			if (testUser.equals(username)) {
 				cacheName = testCacheName;
 			} else {
 				cacheName = username.substring(0, username.lastIndexOf('|'));
-				bindGuid = UUID.fromString(username.substring(username.lastIndexOf('|')+1, username.length()));
+				bindGuid = UUID.fromString(username.substring(username.lastIndexOf('|') + 1, username.length()));
 			}
-			if(factory.isCacheValid(cacheName)) {
+			if (factory.isCacheValid(cacheName)) {
 				authenticated = true;
 				BinaryMemcacheResponse response = new DefaultBinaryMemcacheResponse();
 				response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
@@ -93,11 +91,12 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 			}
 		}
 		authenticated = false;
-		return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque, BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
+		return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque,
+				BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
 	}
 
 	private boolean validatePassword(String username, String password) {
-		if(testUser.equals(username)) {
+		if (testUser.equals(username)) {
 			return testPassword.equals(password);
 		}
 		byte[] hash = DigestUtils.sha384((username + key));
@@ -113,7 +112,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 	public String getUsername() {
 		return username;
 	}
-	
+
 	@Override
 	public String getCacheName() {
 		return cacheName;

@@ -39,6 +39,9 @@ public class SecretKeyAuthMsgHandlerTest {
 		request.setTotalBodyLength(encodedAuth.length);
 		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
 		Channel channelMock = EasyMock.createNiceMock(Channel.class);
+		EasyMock.expect(channelMock.isOpen()).andReturn(true).anyTimes();
+		EasyMock.expect(channelMock.isActive()).andReturn(true).anyTimes();
+		EasyMock.replay(channelMock);
 		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
 		authHandler.startAuth(ctxMock , request);
@@ -65,9 +68,11 @@ public class SecretKeyAuthMsgHandlerTest {
 		request.setTotalBodyLength(encodedAuth.length);
 		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
 		Channel channelMock = EasyMock.createNiceMock(Channel.class);
+		EasyMock.expect(channelMock.isOpen()).andReturn(true).anyTimes();
+		EasyMock.expect(channelMock.isActive()).andReturn(true).anyTimes();
+		EasyMock.replay(channelMock);
 		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
-		EasyMock.replay(channelMock);
 		authHandler.startAuth(ctxMock , request);
 		
 		MemcacheContent content = new DefaultMemcacheContent(Unpooled.wrappedBuffer(encodedAuth));
@@ -89,6 +94,9 @@ public class SecretKeyAuthMsgHandlerTest {
 		request.setTotalBodyLength(encodedAuth.length);
 		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
 		Channel channelMock = EasyMock.createNiceMock(Channel.class);
+		EasyMock.expect(channelMock.isOpen()).andReturn(true).anyTimes();
+		EasyMock.expect(channelMock.isActive()).andReturn(true).anyTimes();
+		EasyMock.replay(channelMock);
 		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
 		authHandler.startAuth(ctxMock , request);
@@ -111,6 +119,9 @@ public class SecretKeyAuthMsgHandlerTest {
 		request.setTotalBodyLength(encodedAuth.length);
 		ChannelHandlerContext ctxMock = EasyMock.createNiceMock(ChannelHandlerContext.class);
 		Channel channelMock = EasyMock.createNiceMock(Channel.class);
+		EasyMock.expect(channelMock.isOpen()).andReturn(true).anyTimes();
+		EasyMock.expect(channelMock.isActive()).andReturn(true).anyTimes();
+		EasyMock.replay(channelMock);
 		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
 		authHandler.startAuth(ctxMock , request);
