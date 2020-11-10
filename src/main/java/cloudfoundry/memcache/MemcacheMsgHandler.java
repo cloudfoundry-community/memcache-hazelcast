@@ -1,10 +1,9 @@
 package cloudfoundry.memcache;
 
-import java.util.concurrent.Future;
-
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
+import java.util.concurrent.Future;
 
 public interface MemcacheMsgHandler {
 	public byte getOpcode();

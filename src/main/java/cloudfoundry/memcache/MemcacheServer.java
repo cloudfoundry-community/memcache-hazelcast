@@ -11,6 +11,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheServerCodec;
+import io.netty.handler.timeout.IdleStateHandler;
 
 public class MemcacheServer implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheServer.class);
@@ -34,10 +35,11 @@ public class MemcacheServer implements AutoCloseable {
 						@Override
 						protected void initChannel(SocketChannel ch) throws Exception {
 							ch.pipeline().addFirst("memcache", new BinaryMemcacheServerCodec());
+							ch.pipeline().addLast(new IdleStateHandler(60, 10, 0));
 							ch.pipeline().addLast("memcache-handler",
 									new MemcacheInboundHandlerAdapter(msgHandlerFactory,
 											authMsgHandlerFactory.createAuthMsgHandler(msgHandlerFactory),
-											queueSizeLimit, requestRateLimit, MemcacheServer.this, memcacheStats));
+											queueSizeLimit, requestRateLimit, memcacheStats));
 						}
 					}).childOption(ChannelOption.TCP_NODELAY, true).childOption(ChannelOption.SO_KEEPALIVE, true)
 					.childOption(ChannelOption.AUTO_READ, false).bind(port).sync();
