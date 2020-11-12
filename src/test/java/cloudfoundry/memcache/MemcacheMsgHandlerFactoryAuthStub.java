@@ -31,7 +31,7 @@ public class MemcacheMsgHandlerFactoryAuthStub implements MemcacheMsgHandlerFact
 	}
 
 	@Override
-	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler) {
+	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler, String channelId) {
 		return null;
 	}
 }

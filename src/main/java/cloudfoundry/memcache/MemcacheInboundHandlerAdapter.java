@@ -1,6 +1,7 @@
 package cloudfoundry.memcache;
 
 import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelPromise;
@@ -16,7 +17,6 @@ import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
 import io.netty.util.ReferenceCountUtil;
-import io.netty.util.concurrent.GenericFutureListener;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -24,10 +24,14 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.LongAdder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
+
+	private static final Duration CONNECTION_STATISTICS_LOG_INTERVAL = Duration.ofMinutes(15);
+	private static final Duration RATE_LIMIT_LOG_INTERVAL = Duration.ofMinutes(1);
 
 	private static final Duration REQUEST_QUEUE_MAX_AGE = Duration.ofMinutes(1);
 
@@ -35,100 +39,137 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheInboundHandlerAdapter.class);
 
-	public static final GenericFutureListener<io.netty.util.concurrent.Future<Void>> FAILURE_LOGGING_LISTENER = future -> {
+	public static final ChannelFutureListener FAILURE_LOGGING_LISTENER = future -> {
+		LogUtils.setupChannelMdc(future.channel().id().asShortText());
 		try {
 			future.get();
 		} catch (Exception e) {
 			LOGGER.warn("Error closing Channel. {}", e.getMessage());
+		} finally {
+			LogUtils.cleanupChannelMdc();
 		}
 	};
 
+	private final String channelId;
 	private final MemcacheMsgHandlerFactory msgHandlerFactory;
-
-	private MemcacheMsgHandler currentMsgHandler;
 	private final AuthMsgHandler authMsgHandler;
 	private final Deque<Request> requestQueue;
 	private final MemcacheStats memcacheStats;
-	private ResponseSender failureResponse;
-	Request currentRequest;
 	private final int requestRateLimit;
 	private final int queueSizeLimit;
-	private volatile boolean scheduledRead = false;
-	private long triggeredRequestLimitDuration = 0;
-	private long triggeredRequestLimitStart = 0;
-	private boolean triggeredRequestRateLimit = false;
-	private long loggableRequestRate = 0;
-	private boolean triggeredQueueLimit = false;
-	private long loggableQueueSize = 0;
-	ScheduledFuture<?> rateMonitoringScheduler;
+	private final ScheduledFuture<?> userLimitReporter;
+	private final ScheduledFuture<?> connectionStatisticsReporter;
+	private final UserRateLimitLogger rateLimitLogger = new UserRateLimitLogger();
+	private final ConnectionStatisticsLogger connectionStatisticsLogger = new ConnectionStatisticsLogger();
 
-	public MemcacheInboundHandlerAdapter(MemcacheMsgHandlerFactory msgHandlerFactory, AuthMsgHandler authMsgHandler,
-			int queueSizeLimit, int requestRateLimit, MemcacheStats memcacheStats) {
+	private MemcacheMsgHandler currentMsgHandler;
+	private ResponseSender failureResponse;
+	private Request currentRequest;
+	private volatile boolean scheduledRead = false;
+	private ChannelFutureListener authCompleteListener;
+
+	public MemcacheInboundHandlerAdapter(String channelId, MemcacheMsgHandlerFactory msgHandlerFactory,
+			AuthMsgHandler authMsgHandler, int queueSizeLimit, int requestRateLimit, MemcacheStats memcacheStats) {
 		super();
+		this.channelId = channelId;
 		this.msgHandlerFactory = msgHandlerFactory;
 		this.authMsgHandler = authMsgHandler;
 		this.queueSizeLimit = queueSizeLimit;
 		this.requestRateLimit = requestRateLimit;
 		this.memcacheStats = memcacheStats;
-		requestQueue = new ArrayDeque<>(queueSizeLimit + 100);
-		rateMonitoringScheduler = msgHandlerFactory.getScheduledExecutorService().scheduleAtFixedRate(() -> {
-			if (LOGGER.isDebugEnabled()) {
-				LOGGER.debug("Current load rate requests/10sec: rate={} user={}", loggableRequestRate,
-						getCurrentUser());
-				LOGGER.debug("Current request queue size: size={} user={}", loggableQueueSize, getCurrentUser());
+		this.requestQueue = new ArrayDeque<>(queueSizeLimit + 100);
+		this.userLimitReporter = msgHandlerFactory.getScheduledExecutorService().scheduleAtFixedRate(rateLimitLogger,
+				RATE_LIMIT_LOG_INTERVAL.toMillis(), RATE_LIMIT_LOG_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
+		this.connectionStatisticsReporter = msgHandlerFactory.getScheduledExecutorService().scheduleAtFixedRate(
+				connectionStatisticsLogger, CONNECTION_STATISTICS_LOG_INTERVAL.toMillis(),
+				CONNECTION_STATISTICS_LOG_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
+		this.authCompleteListener = future -> {
+			LogUtils.setupChannelMdc(channelId);
+			try {
+				if (getAuthMsgHandler() != null && getAuthMsgHandler().isAuthenticated()) {
+					LOGGER.info("Connection Authenticated: user={}", getAuthMsgHandler().getUsername());
+				} else {
+					if (getAuthMsgHandler() != null) {
+						LOGGER.warn("Connection Authentication FAILED: user={}", getAuthMsgHandler().getUsername());
+					} else {
+						LOGGER.warn("Connection Authentication FAILED");
+					}
+					future.channel().close().addListener(FAILURE_LOGGING_LISTENER);
+				}
+			} finally {
+				LogUtils.cleanupChannelMdc();
 			}
-			if (triggeredRequestRateLimit) {
-				LOGGER.warn("Requests are being rate limited at requests/10sec: rate={} pause={}ms user={}",
-						loggableRequestRate, triggeredRequestLimitDuration, getCurrentUser());
-				loggableRequestRate = 0;
-				triggeredRequestRateLimit = false;
-			}
-			if (triggeredQueueLimit) {
-				LOGGER.warn("Queue is being rate limited: size={} user={}", loggableQueueSize, getCurrentUser());
-				triggeredQueueLimit = false;
-				loggableQueueSize = 0;
-			}
-		}, 60, 60, TimeUnit.SECONDS);
+		};
+
 	}
 
 	@Override
 	public void channelActive(ChannelHandlerContext ctx) throws Exception {
-		ctx.channel().closeFuture().addListener(future -> {
-			try {
-				rateMonitoringScheduler.cancel(false);
-			} catch (Exception t) {
-				LOGGER.warn("Error cancelling rate monitoring scheduled task.", t);
-			}
-			clearMessageQueue();
-		});
-		readIfNotRateLimited(ctx);
-		super.channelActive(ctx);
+		LogUtils.setupChannelMdc(channelId);
+		try {
+			LOGGER.info("Connection Created: remote={} local={}", ctx.channel().remoteAddress(),
+					ctx.channel().localAddress());
+			ctx.channel().closeFuture().addListener(future -> {
+				LogUtils.setupChannelMdc(channelId);
+				try {
+					try {
+						userLimitReporter.cancel(true);
+					} catch (Exception t) {
+						LOGGER.warn("Error cancelling limit reporter scheduled task.", t);
+					}
+					try {
+						connectionStatisticsReporter.cancel(true);
+					} catch (Exception t) {
+						LOGGER.warn("Error cancelling statistics reporter scheduled task.", t);
+					}
+					clearMessageQueue();
+					LOGGER.info("Connection Closed.");
+				} finally {
+					LogUtils.cleanupChannelMdc();
+				}
+			});
+			readIfNotRateLimited(ctx);
+			super.channelActive(ctx);
+		} finally {
+			LogUtils.cleanupChannelMdc();
+		}
 	}
 
 	@Override
 	public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
-		readIfNotRateLimited(ctx);
-		super.channelReadComplete(ctx);
+		LogUtils.setupChannelMdc(channelId);
+		try {
+			readIfNotRateLimited(ctx);
+			super.channelReadComplete(ctx);
+		} finally {
+			LogUtils.cleanupChannelMdc();
+		}
 	}
 
 	@Override
 	public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-		if (evt instanceof IdleStateEvent) {
-			IdleStateEvent e = (IdleStateEvent) evt;
-			if (e.state() == IdleState.READER_IDLE) {
-				// try a read just to make sure the channel is still functioning.
-				readIfNotRateLimited(ctx);
-			} else if (e.state() == IdleState.WRITER_IDLE && !requestQueue.isEmpty() && System.currentTimeMillis()
-					- requestQueue.peek().getCreated() > REQUEST_QUEUE_MAX_AGE.toMillis()) {
-				throw new IllegalStateException(
-						"Message at bottom of queue has been in the queue longer than: " + REQUEST_QUEUE_MAX_AGE);
+		LogUtils.setupChannelMdc(channelId);
+		try {
+			if (evt instanceof IdleStateEvent) {
+				IdleStateEvent e = (IdleStateEvent) evt;
+				if (e.state() == IdleState.READER_IDLE) {
+					// try a read just to make sure the channel is still functioning.
+					readIfNotRateLimited(ctx);
+				} else if (e.state() == IdleState.WRITER_IDLE && !requestQueue.isEmpty() && System.currentTimeMillis()
+						- requestQueue.peek().getCreated() > REQUEST_QUEUE_MAX_AGE.toMillis()) {
+					throw new IllegalStateException(
+							"Message at bottom of queue has been in the queue longer than: " + REQUEST_QUEUE_MAX_AGE);
+				}
 			}
+			super.userEventTriggered(ctx, evt);
+		} finally {
+			LogUtils.cleanupChannelMdc();
 		}
-		super.userEventTriggered(ctx, evt);
 	}
 
 	@Override
 	public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+		LogUtils.setupChannelMdc(channelId);
 		try {
 			if (!(msg instanceof MemcacheObject)) {
 				throw new IllegalArgumentException(
@@ -153,6 +194,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				}
 				return;
 			}
+
 			switch (currentRequest.getRequestKey().getOpcode()) {
 			case BinaryMemcacheOpcodes.GET:
 			case BinaryMemcacheOpcodes.GETQ:
@@ -241,8 +283,6 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				return;
 			case BinaryMemcacheOpcodes.GAT:
 			case BinaryMemcacheOpcodes.GATQ:
-				handleMessageHandlerResponse(currentMsgHandler.gat(ctx, requestIsNotNull(request)));
-				return;
 			case BinaryMemcacheOpcodes.GATK:
 			case BinaryMemcacheOpcodes.GATKQ:
 				handleMessageHandlerResponse(currentMsgHandler.gat(ctx, requestIsNotNull(request)));
@@ -258,10 +298,14 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 					throw new IllegalStateException("Attempting to authenticate in already authenticated channel.");
 				}
 				if (request != null) {
-					handleMessageHandlerResponse(getAuthMsgHandler().startAuth(ctx, request));
+					ChannelFuture response = getAuthMsgHandler().startAuth(ctx, request);
+					if (response != null) {
+						completeRequest(response.addListener(authCompleteListener));
+					}
 				} else {
 					if (memcacheObject instanceof MemcacheContent) {
-						completeRequest(getAuthMsgHandler().startAuth(ctx, (MemcacheContent) memcacheObject));
+						completeRequest(getAuthMsgHandler().startAuth(ctx, (MemcacheContent) memcacheObject)
+								.addListener(authCompleteListener));
 					} else {
 						throw new IllegalStateException(
 								"SASL auth requires MemcacheContent instance if not a BinaryMemcacheRequest.  class="
@@ -281,18 +325,22 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			default:
 				if (memcacheObject instanceof BinaryMemcacheRequest) {
 					LOGGER.info("Failed to handle request: optcode={}", currentRequest.getRequestKey().getOpcode());
-					MemcacheUtils
+					completeRequest(MemcacheUtils
 							.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND,
 									"Unable to handle command: 0x"
 											+ Integer.toHexString(currentRequest.getRequestKey().getOpcode()))
-							.send(ctx).addListener(ChannelFutureListener.CLOSE);
+							.send(ctx).addListener(ChannelFutureListener.CLOSE));
 				} else {
 					throw new IllegalStateException(
 							"Got a message we didn't know how to handle: " + memcacheObject.getClass());
 				}
 			}
 		} finally {
-			ReferenceCountUtil.release(msg);
+			try {
+				ReferenceCountUtil.release(msg);
+			} finally {
+				LogUtils.cleanupChannelMdc();
+			}
 		}
 	}
 
@@ -311,6 +359,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		currentRequest = new Request(new MemcacheRequestKey(request));
 		requestQueue.offer(currentRequest);
 		memcacheStats.logHit(currentRequest.getRequestKey().getOpcode(), getCurrentUser());
+		connectionStatisticsLogger.logRequest();
 		if (Short.toUnsignedInt(request.keyLength()) > MAX_KEY_SIZE) {
 			LOGGER.debug("Key too big.  Skipping this request.");
 			failureResponse = MemcacheUtils.returnFailure(currentRequest.getRequestKey().getOpcode(), request.opaque(),
@@ -318,7 +367,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			return null;
 		}
 		if (getAuthMsgHandler().isAuthenticated()) {
-			currentMsgHandler = msgHandlerFactory.createMsgHandler(request, getAuthMsgHandler());
+			currentMsgHandler = msgHandlerFactory.createMsgHandler(request, getAuthMsgHandler(), channelId);
 		} else {
 			currentMsgHandler = new NoAuthMemcacheMsgHandler(request);
 		}
@@ -327,73 +376,67 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 	@Override
 	public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-		if (!(msg instanceof BinaryMemcacheMessage)) {
-			throw new IllegalStateException("We only support MemcacheMessages.");
-		}
-		BinaryMemcacheMessage memcacheMessage = (BinaryMemcacheMessage) msg;
-		MemcacheRequestKey key = new MemcacheRequestKey(memcacheMessage);
-		if (requestQueue.isEmpty()) {
-			throw new IllegalStateException("We got a write event but the request queue was empty.");
-		}
-		queueMsg(key, memcacheMessage, promise);
+		LogUtils.setupChannelMdc(channelId);
+		try {
+			if (!(msg instanceof BinaryMemcacheMessage)) {
+				throw new IllegalStateException("We only support MemcacheMessages.");
+			}
+			BinaryMemcacheMessage memcacheMessage = (BinaryMemcacheMessage) msg;
+			MemcacheRequestKey key = new MemcacheRequestKey(memcacheMessage);
+			if (requestQueue.isEmpty()) {
+				throw new IllegalStateException("We got a write event but the request queue was empty.");
+			}
+			queueMsg(key, memcacheMessage, promise);
 
-		while (!requestQueue.isEmpty() && requestQueue.peek().complete()) {
-			Request message = requestQueue.poll();
-			if (LOGGER.isDebugEnabled()) {
-				LOGGER.debug("Writing messages for: key={}", message.requestKey);
-			}
-			while (!message.responses.isEmpty()) {
-				MessageResponse response = message.responses.poll();
-				if (response.message instanceof QuietResponse) {
-					continue;
+			while (!requestQueue.isEmpty() && requestQueue.peek().complete()) {
+				Request message = requestQueue.poll();
+				if (LOGGER.isDebugEnabled()) {
+					LOGGER.debug("Writing messages for: key={}", message.requestKey);
 				}
-				ctx.write(response.message, response.promise);
+				while (!message.responses.isEmpty()) {
+					MessageResponse response = message.responses.poll();
+					if (response.message instanceof QuietResponse) {
+						continue;
+					}
+					ctx.write(response.message, response.promise);
+				}
 			}
+			ctx.flush();
+		} finally {
+			LogUtils.cleanupChannelMdc();
 		}
-		ctx.flush();
 	}
 
 	private void readIfNotRateLimited(ChannelHandlerContext ctx) {
-		boolean requestLimitHit = false;
 		long load = memcacheStats.requestsInWindow(getCurrentUser());
+		long timeLeftInWindow = memcacheStats.msLeftInWindow(getCurrentUser());
 
-		if (load > loggableRequestRate) {
-			loggableRequestRate = load;
-		}
-
+		boolean requestLimitHit = false;
 		if (load > requestRateLimit) {
 			requestLimitHit = true;
+			rateLimitLogger.requestRateLimitTriggered(load, timeLeftInWindow);
 			if (!scheduledRead) {
 				scheduledRead = true;
-				if (triggeredRequestLimitStart == 0) {
-					triggeredRequestLimitStart = System.currentTimeMillis();
-				}
 				msgHandlerFactory.getScheduledExecutorService().schedule(() -> {
-					scheduledRead = false;
-					readIfNotRateLimited(ctx);
-				}, memcacheStats.msLeftInWindow(getCurrentUser()), TimeUnit.MILLISECONDS);
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						scheduledRead = false;
+						readIfNotRateLimited(ctx);
+					} finally {
+						LogUtils.cleanupChannelMdc();
+					}
+				}, timeLeftInWindow, TimeUnit.MILLISECONDS);
 			}
 		}
 
 		boolean queueLimitHit = false;
 		int queueSize = requestQueue.size();
-		if (queueSize > loggableQueueSize) {
-			loggableQueueSize = queueSize;
-		}
 		if (queueSize >= queueSizeLimit) {
 			queueLimitHit = true;
-			triggeredQueueLimit = true;
+			rateLimitLogger.queueRateLimitTriggered(queueSize);
 		}
 
 		if (!requestLimitHit && !queueLimitHit) {
-			if (triggeredRequestLimitStart != 0) {
-				triggeredRequestRateLimit = true;
-				long duration = System.currentTimeMillis() - triggeredRequestLimitStart;
-				if (duration > triggeredRequestLimitDuration) {
-					triggeredRequestLimitDuration = duration;
-				}
-				triggeredRequestLimitStart = 0;
-			}
 			ctx.read();
 		}
 	}
@@ -434,10 +477,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 	}
 
 	private boolean isChannelReadyForNewRequest() {
-		if (currentMsgHandler == null && currentRequest == null && failureResponse == null) {
-			return true;
-		}
-		return false;
+		return currentMsgHandler == null && currentRequest == null && failureResponse == null;
 	}
 
 	private void completeRequest(Future<?> task) {
@@ -449,29 +489,34 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 	@Override
 	public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-		if (ctx.channel().isOpen()) {
-			if (LOGGER.isDebugEnabled()) {
-				LOGGER.debug("Got error on closed channel", cause);
-			}
-			return;
-		}
+		LogUtils.setupChannelMdc(channelId);
 		try {
-			if (isAnyCauseInstanceOf(cause, CancellationException.class)) {
-				// Ignore this type of error.
-			} else if (isAnyCauseInstanceOf(cause, MemcacheBackendStateException.class)) {
-				ShutdownUtils.gracefullyExit(
-						"MemcacheClusterStateException thrown. Closing this connection and shutting down the server because we don't know the state we're in.",
-						(byte) 99, cause);
-			} else if (cause != null && cause.getMessage() != null && cause.getMessage().contains("Connection reset")) {
-				LOGGER.info("Connection unexpectedly reset.  Closing connection. user={}", getCurrentUser());
-			} else if (isAnyCauseInstanceOf(cause, IllegalStateException.class)) {
-				LOGGER.warn("Connection in unknown state. Closing connection. user={} msg={}", getCurrentUser(),
-						cause.getMessage());
-			} else {
-				LOGGER.error("Unexpected Error. Closing connection. user={}", getCurrentUser(), cause);
+			if (!ctx.channel().isOpen()) {
+				if (LOGGER.isDebugEnabled()) {
+					LOGGER.debug("Got error on closed channel", cause);
+				}
+				return;
+			}
+			try {
+				if (isAnyCauseInstanceOf(cause, CancellationException.class)) {
+					// Ignore this type of error.
+				} else if (isAnyCauseInstanceOf(cause, MemcacheBackendStateException.class)) {
+					ShutdownUtils.gracefullyExit(
+							"MemcacheClusterStateException thrown. Closing this connection and shutting down the server because we don't know the state we're in.",
+							(byte) 99, cause);
+				} else if (cause != null && cause.getMessage() != null
+						&& cause.getMessage().contains("Connection reset")) {
+					LOGGER.info("Connection unexpectedly reset.");
+				} else if (isAnyCauseInstanceOf(cause, IllegalStateException.class)) {
+					LOGGER.warn("Connection in unknown state. msg={}", cause.getMessage());
+				} else {
+					LOGGER.error("Unexpected Error.", cause);
+				}
+			} finally {
+				ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 			}
 		} finally {
-			ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
+			LogUtils.cleanupChannelMdc();
 		}
 	}
 
@@ -503,6 +548,68 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		for (Request request : requestQueue) {
 			request.clear();
 		}
+	}
+
+	private class ConnectionStatisticsLogger implements Runnable {
+		private long requestsLastReport = 0;
+		private LongAdder requests = new LongAdder();
+
+		@Override
+		public void run() {
+			LogUtils.setupChannelMdc(channelId);
+			try {
+				long total = requests.sum();
+				LOGGER.info("Statistics: user={} requestDelta={} queueSize={}", getCurrentUser(),
+						total - requestsLastReport, requestQueue.size());
+				requestsLastReport = total;
+			} finally {
+				LogUtils.cleanupChannelMdc();
+			}
+		}
+
+		public void logRequest() {
+			requests.increment();
+		}
+	}
+
+	private class UserRateLimitLogger implements Runnable {
+		private long triggeredRequestLimitDuration = 0;
+		private boolean triggeredRequestRateLimit = false;
+		private long triggeredRequestLimitRate = 0;
+		private boolean triggeredQueueLimit = false;
+		private long triggeredQueueSize = 0;
+
+		@Override
+		public void run() {
+			if (triggeredRequestRateLimit) {
+				LOGGER.warn("Requests are being rate limited at requests/10sec: rate={} pause={}ms user={}",
+						triggeredRequestLimitRate, triggeredRequestLimitDuration, getCurrentUser());
+				triggeredRequestLimitRate = 0;
+				triggeredRequestLimitDuration = 0;
+				triggeredRequestRateLimit = false;
+			}
+			if (triggeredQueueLimit) {
+				LOGGER.warn("Queue is being rate limited: size={} user={}", triggeredQueueSize, getCurrentUser());
+				triggeredQueueLimit = false;
+				triggeredQueueSize = 0;
+			}
+		}
+
+		public void requestRateLimitTriggered(long triggeredLimit, long triggeredDuration) {
+			if (!triggeredRequestRateLimit) {
+				triggeredRequestRateLimit = true;
+				this.triggeredRequestLimitDuration = triggeredDuration;
+				this.triggeredRequestLimitRate = triggeredLimit;
+			}
+		}
+
+		public void queueRateLimitTriggered(long queueSize) {
+			if (!triggeredQueueLimit) {
+				this.triggeredQueueLimit = true;
+				this.triggeredQueueSize = queueSize;
+			}
+		}
+
 	}
 
 	private static class Request {

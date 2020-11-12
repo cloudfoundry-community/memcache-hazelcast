@@ -1,6 +1,7 @@
 package cloudfoundry.memcache;
 
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.memcache.MemcacheContent;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheOpcodes;
@@ -10,10 +11,8 @@ import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
 import io.netty.handler.codec.memcache.binary.DefaultBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.DefaultFullBinaryMemcacheResponse;
 import io.netty.handler.codec.memcache.binary.FullBinaryMemcacheResponse;
-
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
-import java.util.concurrent.Future;
 
 public class StubAuthMsgHandler implements AuthMsgHandler {
 	
@@ -28,7 +27,7 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 	}
 
 	@Override
-	public Future<?> listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public ChannelFuture listMechs(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		FullBinaryMemcacheResponse response;
 		try {
@@ -40,19 +39,18 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 		response.setOpcode(request.opcode());
 		response.setOpaque(request.opaque());
 		response.setTotalBodyLength(SecretKeyAuthMsgHandler.SUPPORTED_SASL_MECHS.length());
-		MemcacheUtils.writeAndFlush(ctx, response);
-		return CompletedFuture.INSTANCE;
+		return MemcacheUtils.writeAndFlush(ctx, response);
 	}
 
 	@Override
-	public Future<?> startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+	public ChannelFuture startAuth(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
 		MemcacheUtils.logRequest(request);
 		opaque = request.opaque();
 		return null;
 	}
 
 	@Override
-	public Future<?> startAuth(ChannelHandlerContext ctx, MemcacheContent content) {
+	public ChannelFuture startAuth(ChannelHandlerContext ctx, MemcacheContent content) {
 		byte[] arrayContent = new byte[content.content().capacity()];
 		content.content().readBytes(arrayContent);
 		username = MemcacheUtils.extractSaslUsername(arrayContent);
@@ -60,8 +58,7 @@ public class StubAuthMsgHandler implements AuthMsgHandler {
 		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
 		response.setOpcode(BinaryMemcacheOpcodes.SASL_AUTH);
 		response.setOpaque(opaque);
-		MemcacheUtils.writeAndFlush(ctx, response);
-		return CompletedFuture.INSTANCE;
+		return MemcacheUtils.writeAndFlush(ctx, response);
 	}
 	
 	public boolean isAuthenticated() {

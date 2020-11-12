@@ -12,7 +12,7 @@
 			<onMismatch>NEUTRAL</onMismatch>
 		</filter>
 		<encoder>
-			<pattern>%d{"yyyy-MM-dd'T'HH:mm:ss.SSSXXX"} [%-5level] %logger{10}: %msg%n</pattern>
+			<pattern>%d{"yyyy-MM-dd'T'HH:mm:ss.SSSXXX"} [%-5level] %mdc %logger{10}: %msg%n</pattern>
 		</encoder>
 	</appender>
 	<appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
@@ -21,7 +21,7 @@
 			<level>WARN</level>
 		</filter>
 		<encoder>
-			<pattern>%d{"yyyy-MM-dd'T'HH:mm:ss.SSSXXX"} [%-5level] %logger{10}: %msg%n</pattern>
+			<pattern>%d{"yyyy-MM-dd'T'HH:mm:ss.SSSXXX"} [%-5level] %mdc %logger{10}: %msg%n</pattern>
 		</encoder>
 	</appender>
 	<root level="INFO">

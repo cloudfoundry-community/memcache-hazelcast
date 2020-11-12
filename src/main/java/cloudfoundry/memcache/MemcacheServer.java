@@ -37,7 +37,7 @@ public class MemcacheServer implements AutoCloseable {
 							ch.pipeline().addFirst("memcache", new BinaryMemcacheServerCodec());
 							ch.pipeline().addLast(new IdleStateHandler(60, 10, 0));
 							ch.pipeline().addLast("memcache-handler",
-									new MemcacheInboundHandlerAdapter(msgHandlerFactory,
+									new MemcacheInboundHandlerAdapter(ch.id().asShortText(), msgHandlerFactory,
 											authMsgHandlerFactory.createAuthMsgHandler(msgHandlerFactory),
 											queueSizeLimit, requestRateLimit, memcacheStats));
 						}

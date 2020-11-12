@@ -2,6 +2,7 @@ package cloudfoundry.memcache.hazelcast;
 
 import cloudfoundry.memcache.AuthMsgHandler;
 import cloudfoundry.memcache.CompletedFuture;
+import cloudfoundry.memcache.LogUtils;
 import cloudfoundry.memcache.MemcacheBackendStateException;
 import cloudfoundry.memcache.MemcacheMsgHandler;
 import cloudfoundry.memcache.MemcacheUtils;
@@ -63,10 +64,11 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	final byte[] key;
 	final long cas;
 	final int maxValueSize;
+	final String channelId;
 	long expirationInSeconds;
 
 	public HazelcastMemcacheMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler,
-			HazelcastInstance instance, Integer maxValueSize) {
+			HazelcastInstance instance, Integer maxValueSize, String channelId) {
 		this.authMsgHandler = authMsgHandler;
 		this.instance = instance;
 		this.opcode = request.opcode();
@@ -74,6 +76,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 		this.key = request.key() == null ? null : Unpooled.copiedBuffer(request.key()).array();
 		this.cas = request.cas();
 		this.maxValueSize = maxValueSize;
+		this.channelId = channelId;
 	}
 
 	@Override
@@ -136,48 +139,59 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			ExecutionCallback<HazelcastMemcacheCacheValue> callback = new ExecutionCallback<HazelcastMemcacheCacheValue>() {
 				@Override
 				public void onResponse(HazelcastMemcacheCacheValue value) {
-					if (value == null && opcode == nonQuietOpcode) {
-						MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT,
-								"Unable to find Key: " + key).send(ctx);
-						return;
-					} else if (value == null) {
-						MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
-						return;
-					}
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						if (value == null && opcode == nonQuietOpcode) {
+							MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT,
+									"Unable to find Key: " + key).send(ctx);
+							return;
+						} else if (value == null) {
+							MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+							return;
+						}
 
-					ByteBuf responseValue = value.getValue();
-					ByteBuf responseFlags = value.getFlags();
+						ByteBuf responseValue = value.getValue();
+						ByteBuf responseFlags = value.getFlags();
 
-					if (value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
-						long incDecValue = value.getValue().readLong();
-						responseValue = Unpooled
-								.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes(StandardCharsets.UTF_8));
-						responseFlags = Unpooled.wrappedBuffer(new byte[4]);
-					}
+						if (value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
+							long incDecValue = value.getValue().readLong();
+							responseValue = Unpooled
+									.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes(StandardCharsets.UTF_8));
+							responseFlags = Unpooled.wrappedBuffer(new byte[4]);
+						}
 
-					FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags,
-							responseValue);
-					response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-					response.setOpcode(opcode);
-					response.setCas(value.getCAS());
-					response.setOpaque(opaque);
-					if (includeKey) {
-						ByteBuf responseKey = Unpooled.wrappedBuffer(key);
-						response.setKey(responseKey);
-						response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity() + key.length);
-					} else {
-						response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
-					}
-					MemcacheUtils.writeAndFlush(ctx, response);
-					if (LOGGER.isDebugEnabled()) {
-						LOGGER.debug("Current Socket: {} Flushed response for key: {}", ctx.channel().id(), key);
+						FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags,
+								responseValue);
+						response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+						response.setOpcode(opcode);
+						response.setCas(value.getCAS());
+						response.setOpaque(opaque);
+						if (includeKey) {
+							ByteBuf responseKey = Unpooled.wrappedBuffer(key);
+							response.setKey(responseKey);
+							response.setTotalBodyLength(
+									responseFlags.capacity() + responseValue.capacity() + key.length);
+						} else {
+							response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
+						}
+						MemcacheUtils.writeAndFlush(ctx, response);
+						if (LOGGER.isDebugEnabled()) {
+							LOGGER.debug("Current Socket: {} Flushed response for key: {}", ctx.channel().id(), key);
+						}
+					} finally {
+						LogUtils.cleanupChannelMdc();
 					}
 
 				}
 
 				@Override
 				public void onFailure(Throwable t) {
-					handleException(ctx, t);
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						handleException(ctx, t);
+					} finally {
+						LogUtils.cleanupChannelMdc();
+					}
 				}
 			};
 			executeOrAddCallback(future, callback);
@@ -254,20 +268,30 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 					@Override
 					public void onResponse(HazelcastMemcacheMessage response) {
-						if (response.isSuccess()) {
-							if (opcode == nonQuietOpcode) {
-								MemcacheUtils.returnSuccess(opcode, opaque, response.getCas(), null).send(ctx);
+						LogUtils.setupChannelMdc(channelId);
+						try {
+							if (response.isSuccess()) {
+								if (opcode == nonQuietOpcode) {
+									MemcacheUtils.returnSuccess(opcode, opaque, response.getCas(), null).send(ctx);
+								} else {
+									MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+								}
 							} else {
-								MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+								MemcacheUtils.returnFailure(opcode, opaque, response.getCode(), response.getMsg())
+										.send(ctx);
 							}
-						} else {
-							MemcacheUtils.returnFailure(opcode, opaque, response.getCode(), response.getMsg())
-									.send(ctx);
+						} finally {
+							LogUtils.cleanupChannelMdc();
 						}
 					}
 
 					public void onFailure(Throwable t) {
-						handleException(ctx, t);
+						LogUtils.setupChannelMdc(channelId);
+						try {
+							handleException(ctx, t);
+						} finally {
+							LogUtils.cleanupChannelMdc();
+						}
 					}
 				};
 				// Null out so it can get GCed No need to keep it now.
@@ -313,19 +337,29 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			ExecutionCallback<Boolean> callback = new ExecutionCallback<Boolean>() {
 				@Override
 				public void onResponse(Boolean response) {
-					if (response.booleanValue() && opcode == BinaryMemcacheOpcodes.DELETE) {
-						MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
-					} else if (!response.booleanValue()) {
-						MemcacheUtils
-								.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Entry not found.")
-								.send(ctx);
-					} else {
-						MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						if (response.booleanValue() && opcode == BinaryMemcacheOpcodes.DELETE) {
+							MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+						} else if (!response.booleanValue()) {
+							MemcacheUtils
+									.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Entry not found.")
+									.send(ctx);
+						} else {
+							MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
+						}
+					} finally {
+						LogUtils.cleanupChannelMdc();
 					}
 				}
 
 				public void onFailure(Throwable t) {
-					handleException(ctx, t);
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						handleException(ctx, t);
+					} finally {
+						LogUtils.cleanupChannelMdc();
+					}
 				}
 			};
 
@@ -373,30 +407,36 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 				@Override
 				public void onResponse(HazelcastMemcacheMessage msg) {
-					if (!msg.isSuccess()) {
-						MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
-						return;
-					}
-					if (opcode == BinaryMemcacheOpcodes.INCREMENT || opcode == BinaryMemcacheOpcodes.DECREMENT) {
-						FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null,
-								msg.getValue().getValue());
-						response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-						response.setOpcode(opcode);
-						response.setCas(msg.getValue().getCAS());
-						response.setOpaque(opaque);
-						response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
-						MemcacheUtils.writeAndFlush(ctx, response);
-					} else {
-						MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						if (!msg.isSuccess()) {
+							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+							return;
+						}
+						if (opcode == BinaryMemcacheOpcodes.INCREMENT || opcode == BinaryMemcacheOpcodes.DECREMENT) {
+							FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, null,
+									msg.getValue().getValue());
+							response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+							response.setOpcode(opcode);
+							response.setCas(msg.getValue().getCAS());
+							response.setOpaque(opaque);
+							response.setTotalBodyLength(msg.getValue().getTotalFlagsAndValueLength());
+							MemcacheUtils.writeAndFlush(ctx, response);
+						} else {
+							MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
+						}
+					} finally {
+						LogUtils.cleanupChannelMdc();
 					}
 				}
 
 				public void onFailure(Throwable t) {
-					if (t instanceof CancellationException) {
-						// Task Was cancelled. Ignoring this exception.
-						return;
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						handleException(ctx, t);
+					} finally {
+						LogUtils.cleanupChannelMdc();
 					}
-					handleException(ctx, t);
 				}
 			};
 			executeOrAddCallback(future, callback);
@@ -479,18 +519,28 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 					@Override
 					public void onResponse(HazelcastMemcacheMessage msg) {
-						if (!msg.isSuccess()) {
-							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
-						}
-						if (opcode == BinaryMemcacheOpcodes.APPEND || opcode == BinaryMemcacheOpcodes.PREPEND) {
-							MemcacheUtils.returnSuccess(opcode, opaque, msg.getCas(), null).send(ctx);
-						} else {
-							MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+						LogUtils.setupChannelMdc(channelId);
+						try {
+							if (!msg.isSuccess()) {
+								MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+							}
+							if (opcode == BinaryMemcacheOpcodes.APPEND || opcode == BinaryMemcacheOpcodes.PREPEND) {
+								MemcacheUtils.returnSuccess(opcode, opaque, msg.getCas(), null).send(ctx);
+							} else {
+								MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+							}
+						} finally {
+							LogUtils.cleanupChannelMdc();
 						}
 					}
 
 					public void onFailure(Throwable t) {
-						handleException(ctx, t);
+						LogUtils.setupChannelMdc(channelId);
+						try {
+							handleException(ctx, t);
+						} finally {
+							LogUtils.cleanupChannelMdc();
+						}
 					}
 				};
 				// null out so it can get GCed while waiting for a response.
@@ -657,15 +707,25 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 				@Override
 				public void onResponse(HazelcastMemcacheMessage msg) {
-					if (!msg.isSuccess()) {
-						MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
-						return;
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						if (!msg.isSuccess()) {
+							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+							return;
+						}
+						MemcacheUtils.returnSuccess(opcode, opaque, 0, null).send(ctx);
+					} finally {
+						LogUtils.cleanupChannelMdc();
 					}
-					MemcacheUtils.returnSuccess(opcode, opaque, 0, null).send(ctx);
 				}
 
 				public void onFailure(Throwable t) {
-					handleException(ctx, t);
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						handleException(ctx, t);
+					} finally {
+						LogUtils.cleanupChannelMdc();
+					}
 				}
 			};
 			executeOrAddCallback(future, callback);
@@ -688,44 +748,56 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			ExecutionCallback<HazelcastMemcacheMessage> callback = new ExecutionCallback<HazelcastMemcacheMessage>() {
 				@Override
 				public void onResponse(HazelcastMemcacheMessage msg) {
-					if (!msg.isSuccess()) {
-						if (msg.getCode() == BinaryMemcacheResponseStatus.KEY_ENOENT
-								&& (opcode == BinaryMemcacheOpcodes.GATQ || opcode == BinaryMemcacheOpcodes.GATKQ)) {
-							MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
-						} else {
-							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						if (!msg.isSuccess()) {
+							if (msg.getCode() == BinaryMemcacheResponseStatus.KEY_ENOENT
+									&& (opcode == BinaryMemcacheOpcodes.GATQ
+											|| opcode == BinaryMemcacheOpcodes.GATKQ)) {
+								MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
+							} else {
+								MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+							}
+							return;
 						}
-						return;
-					}
-					HazelcastMemcacheCacheValue value = msg.getValue();
-					ByteBuf responseValue = value.getValue();
-					ByteBuf responseFlags = value.getFlags();
+						HazelcastMemcacheCacheValue value = msg.getValue();
+						ByteBuf responseValue = value.getValue();
+						ByteBuf responseFlags = value.getFlags();
 
-					if (value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
-						long incDecValue = value.getValue().readLong();
-						responseValue = Unpooled
-								.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes(StandardCharsets.UTF_8));
-						responseFlags = Unpooled.wrappedBuffer(new byte[4]);
-					}
+						if (value.getFlagLength() == 0 && value.getTotalFlagsAndValueLength() == 8) {
+							long incDecValue = value.getValue().readLong();
+							responseValue = Unpooled
+									.wrappedBuffer(Long.toUnsignedString(incDecValue).getBytes(StandardCharsets.UTF_8));
+							responseFlags = Unpooled.wrappedBuffer(new byte[4]);
+						}
 
-					FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags,
-							responseValue);
-					response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-					response.setOpcode(opcode);
-					response.setCas(msg.getValue().getCAS());
-					response.setOpaque(opaque);
-					if (opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ) {
-						ByteBuf responseKey = Unpooled.wrappedBuffer(key);
-						response.setKey(responseKey);
-						response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity() + key.length);
-					} else {
-						response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
+						FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(null, responseFlags,
+								responseValue);
+						response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+						response.setOpcode(opcode);
+						response.setCas(msg.getValue().getCAS());
+						response.setOpaque(opaque);
+						if (opcode == BinaryMemcacheOpcodes.GATK || opcode == BinaryMemcacheOpcodes.GETKQ) {
+							ByteBuf responseKey = Unpooled.wrappedBuffer(key);
+							response.setKey(responseKey);
+							response.setTotalBodyLength(
+									responseFlags.capacity() + responseValue.capacity() + key.length);
+						} else {
+							response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
+						}
+						MemcacheUtils.writeAndFlush(ctx, response);
+					} finally {
+						LogUtils.cleanupChannelMdc();
 					}
-					MemcacheUtils.writeAndFlush(ctx, response);
 				}
 
 				public void onFailure(Throwable t) {
-					handleException(ctx, t);
+					LogUtils.setupChannelMdc(channelId);
+					try {
+						handleException(ctx, t);
+					} finally {
+						LogUtils.cleanupChannelMdc();
+					}
 				}
 			};
 			executeOrAddCallback(future, callback);

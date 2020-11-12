@@ -217,9 +217,9 @@ public class HazelcastMemcacheMsgHandlerFactory implements MemcacheMsgHandlerFac
 				(int id) -> (id == 8) ? new HazelcastGATCallable() : null);
 	}
 
-	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler) {
+	public MemcacheMsgHandler createMsgHandler(BinaryMemcacheRequest request, AuthMsgHandler authMsgHandler, String channelId) {
 		return new HazelcastMemcacheMsgHandler(request, authMsgHandler, instance,
-				appConfig.getMemcache().getMaxValueSize());
+				appConfig.getMemcache().getMaxValueSize(), channelId);
 	}
 
 	public boolean isCacheValid(String cacheName) {
