@@ -24,7 +24,7 @@ public class HazelcastCacheInfoPublisher {
 			if (object instanceof IMap) {
 				IMap<?, ?> map = (IMap<?, ?>) object;
 				LocalMapStats stats = map.getLocalMapStats();
-				System.out.println("{\"time\":\"" + DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(ZonedDateTime.now())
+				System.out.println("{\"time\":\"" + DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(ZonedDateTime.now())
 						+ "\",\"cache\":\"" + map.getName() + "\",\"stats\":" + stats.toJson() + "}");
 			}
 		}
