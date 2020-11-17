@@ -6,7 +6,9 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import cloudfoundry.memcache.MemcacheUtils;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.HazelcastInstanceAware;
 import com.hazelcast.core.IMap;
@@ -14,17 +16,21 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 
-public class HazelcastAppendPrependCallable implements HazelcastInstanceAware, Callable<HazelcastMemcacheMessage>, IdentifiedDataSerializable {
-	private transient HazelcastInstance instance;
+public class HazelcastAppendPrependCallable
+		implements HazelcastInstanceAware, Callable<HazelcastMemcacheMessage>, IdentifiedDataSerializable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastAppendPrependCallable.class);
+	private HazelcastInstance instance;
 	private String cacheName;
 	private byte[] key;
 	HazelcastMemcacheCacheValue cacheValue;
 	boolean append;
 	private long maxValueSize;
 
-	public HazelcastAppendPrependCallable() {	}
+	public HazelcastAppendPrependCallable() {
+	}
 
-	public HazelcastAppendPrependCallable(String cacheName, byte[] key, HazelcastMemcacheCacheValue cacheValue, boolean append, long maxValueSize) {
+	public HazelcastAppendPrependCallable(String cacheName, byte[] key, HazelcastMemcacheCacheValue cacheValue,
+			boolean append, long maxValueSize) {
 		this.maxValueSize = maxValueSize;
 		this.cacheName = cacheName;
 		this.key = key;
@@ -32,36 +38,50 @@ public class HazelcastAppendPrependCallable implements HazelcastInstanceAware, C
 		this.append = append;
 	}
 
-
 	@Override
 	public HazelcastMemcacheMessage call() {
-		IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
 		try {
-			cache.lock(key);
-			HazelcastMemcacheCacheValue value = cache.get(key);
-			if (value == null) {
-				return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.KEY_ENOENT, "No value exists to append/prepend to the specified key.");
-			}
-			if (value.getFlagLength() == 0) {
-				return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.DELTA_BADVAL, "Value appears to be an inc/dec number.  Cannot append/prepend to this.");
-			}
-			int totalValueLength = value.getValueLength() + cacheValue.getValueLength();
-			if (totalValueLength > maxValueSize) {
-				return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.E2BIG, "New value too big.  Max Value is " + maxValueSize);
-			}
-			HazelcastMemcacheCacheValue newValue = new HazelcastMemcacheCacheValue(totalValueLength, value.getFlags(), value.getExpiration());
-			if(append) {
-    			newValue.writeValue(value.getValue());
-    			newValue.writeValue(cacheValue.getValue());
-			} else {
-				newValue.writeValue(cacheValue.getValue());
-				newValue.writeValue(value.getValue());
-			}				
+			IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
+			if (cache.tryLock(key, 1, TimeUnit.SECONDS, 1, TimeUnit.SECONDS)) {
+				try {
+					HazelcastMemcacheCacheValue value = cache.get(key);
+					if (value == null) {
+						return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.KEY_ENOENT,
+								"No value exists to append/prepend to the specified key.");
+					}
+					if (value.getFlagLength() == 0) {
+						return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.DELTA_BADVAL,
+								"Value appears to be an inc/dec number.  Cannot append/prepend to this.");
+					}
+					int totalValueLength = value.getValueLength() + cacheValue.getValueLength();
+					if (totalValueLength > maxValueSize) {
+						return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.E2BIG,
+								"New value too big.  Max Value is " + maxValueSize);
+					}
+					HazelcastMemcacheCacheValue newValue = new HazelcastMemcacheCacheValue(totalValueLength,
+							value.getFlags(), value.getExpiration());
+					if (append) {
+						newValue.writeValue(value.getValue());
+						newValue.writeValue(cacheValue.getValue());
+					} else {
+						newValue.writeValue(cacheValue.getValue());
+						newValue.writeValue(value.getValue());
+					}
 
-			cache.set(key, newValue, newValue.getExpiration(), TimeUnit.SECONDS);
-			return new HazelcastMemcacheMessage(true, newValue.getCAS());
-		} finally {
-			cache.unlock(key);
+					cache.set(key, newValue, newValue.getExpiration(), TimeUnit.SECONDS);
+					return new HazelcastMemcacheMessage(true, newValue.getCAS());
+				} finally {
+					cache.unlock(key);
+				}
+			} else {
+				return new HazelcastMemcacheMessage(false, MemcacheUtils.INTERNAL_ERROR, "Failed to aquire lock on key.");
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return new HazelcastMemcacheMessage(false, MemcacheUtils.INTERNAL_ERROR, "Thread interrupted.");
+		} catch (Exception e) {
+			LOGGER.error("Unexpected Error:", e);
+			return new HazelcastMemcacheMessage(false, MemcacheUtils.INTERNAL_ERROR, "Unexpected Error.  Message: " + e.getMessage());
 		}
 	}
 
@@ -92,7 +112,7 @@ public class HazelcastAppendPrependCallable implements HazelcastInstanceAware, C
 		append = in.readBoolean();
 		try {
 			maxValueSize = in.readLong();
-		} catch(EOFException e) {
+		} catch (EOFException e) {
 			maxValueSize = 1048576;
 		}
 	}

@@ -315,7 +315,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				return;
 			case BinaryMemcacheOpcodes.SASL_STEP:
 				if (request != null) {
-					completeRequest(MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR,
+					completeRequest(MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.AUTH_ERROR, true,
 							"We don't support any auth mechanisms that require a step.").send(ctx));
 				} else {
 					throw new IllegalStateException(
@@ -326,10 +326,10 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				if (memcacheObject instanceof BinaryMemcacheRequest) {
 					LOGGER.info("Failed to handle request: optcode={}", currentRequest.getRequestKey().getOpcode());
 					completeRequest(MemcacheUtils
-							.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND,
+							.returnFailure(request, BinaryMemcacheResponseStatus.UNKNOWN_COMMAND, true,
 									"Unable to handle command: 0x"
 											+ Integer.toHexString(currentRequest.getRequestKey().getOpcode()))
-							.send(ctx).addListener(ChannelFutureListener.CLOSE));
+							.send(ctx));
 				} else {
 					throw new IllegalStateException(
 							"Got a message we didn't know how to handle: " + memcacheObject.getClass());
@@ -363,7 +363,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		if (Short.toUnsignedInt(request.keyLength()) > MAX_KEY_SIZE) {
 			LOGGER.debug("Key too big.  Skipping this request.");
 			failureResponse = MemcacheUtils.returnFailure(currentRequest.getRequestKey().getOpcode(), request.opaque(),
-					BinaryMemcacheResponseStatus.E2BIG, "Key too big.  Max Key is " + MAX_KEY_SIZE);
+					BinaryMemcacheResponseStatus.E2BIG, false, "Key too big.  Max Key is " + MAX_KEY_SIZE);
 			return null;
 		}
 		if (getAuthMsgHandler().isAuthenticated()) {
@@ -393,8 +393,8 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 				if (LOGGER.isDebugEnabled()) {
 					LOGGER.debug("Writing messages for: key={}", message.requestKey);
 				}
-				while (!message.responses.isEmpty()) {
-					MessageResponse response = message.responses.poll();
+				while (!message.getResponses().isEmpty()) {
+					MessageResponse response = message.getResponses().poll();
 					if (response.message instanceof QuietResponse) {
 						continue;
 					}
@@ -506,7 +506,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 							(byte) 99, cause);
 				} else if (cause != null && cause.getMessage() != null
 						&& cause.getMessage().contains("Connection reset")) {
-					LOGGER.info("Connection unexpectedly reset.");
+					LOGGER.warn("Connection unexpectedly reset.");
 				} else if (isAnyCauseInstanceOf(cause, IllegalStateException.class)) {
 					LOGGER.warn("Connection in unknown state. msg={}", cause.getMessage());
 				} else {
@@ -537,7 +537,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 		for (Request queuedMessage : requestQueue) {
 			if (queuedMessage.matchesKey(key) && !queuedMessage.complete()) {
-				queuedMessage.responses.offer(response);
+				queuedMessage.offerResponse(response);
 				return;
 			}
 		}
@@ -633,6 +633,14 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 
 		public void setTask(Future<?> task) {
 			this.task = task;
+		}
+
+		public void offerResponse(MessageResponse response) {
+			responses.offer(response);
+		}
+
+		public Deque<MessageResponse> getResponses() {
+			return responses;
 		}
 
 		public long getCreated() {

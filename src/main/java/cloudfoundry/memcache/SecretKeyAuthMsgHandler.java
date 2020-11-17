@@ -57,7 +57,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 		MemcacheUtils.logRequest(request);
 		if (!SUPPORTED_SASL_MECHS.contains(new String(Unpooled.copiedBuffer(request.key()).array()))) {
 			return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque,
-					BinaryMemcacheResponseStatus.AUTH_ERROR,
+					BinaryMemcacheResponseStatus.AUTH_ERROR, true,
 					"Invalid Authentication Mechanism: " + new String(Unpooled.copiedBuffer(request.key()).array()))
 					.send(ctx);
 		}
@@ -90,7 +90,7 @@ public class SecretKeyAuthMsgHandler implements AuthMsgHandler {
 		}
 		authenticated = false;
 		return MemcacheUtils.returnFailure(BinaryMemcacheOpcodes.SASL_AUTH, opaque,
-				BinaryMemcacheResponseStatus.AUTH_ERROR, "Invalid Username or Password").send(ctx);
+				BinaryMemcacheResponseStatus.AUTH_ERROR, true, "Invalid Username or Password").send(ctx);
 	}
 
 	private boolean validatePassword(String username, String password) {

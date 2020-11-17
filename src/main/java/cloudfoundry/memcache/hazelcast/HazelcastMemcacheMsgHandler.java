@@ -3,10 +3,10 @@ package cloudfoundry.memcache.hazelcast;
 import cloudfoundry.memcache.AuthMsgHandler;
 import cloudfoundry.memcache.CompletedFuture;
 import cloudfoundry.memcache.LogUtils;
-import cloudfoundry.memcache.MemcacheBackendStateException;
 import cloudfoundry.memcache.MemcacheMsgHandler;
 import cloudfoundry.memcache.MemcacheUtils;
 import cloudfoundry.memcache.ResponseSender;
+import cloudfoundry.memcache.ShutdownUtils;
 import com.hazelcast.config.MapConfig;
 import com.hazelcast.core.ExecutionCallback;
 import com.hazelcast.core.HazelcastException;
@@ -19,6 +19,7 @@ import com.hazelcast.core.IMap;
 import com.hazelcast.monitor.LocalMapStats;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.memcache.LastMemcacheContent;
 import io.netty.handler.codec.memcache.MemcacheContent;
@@ -103,24 +104,21 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	private Future<?> handleException(ChannelHandlerContext ctx, Throwable t) {
 		if (t instanceof CancellationException) {
-			// Ignoring this exception.
 			return CompletedFuture.INSTANCE;
 		}
 		if (t instanceof HazelcastInstanceNotActiveException) {
-			throw new MemcacheBackendStateException("Failed to invoke operation. Hazelcast instance not active.", t);
-		}
-		if (LOGGER.isDebugEnabled()) {
-			LOGGER.debug("Error invoking asyncronously: opcode={}", opcode, t);
+			ShutdownUtils.gracefullyExit("Hazelcast instance not active.", (byte) 1, t);
 		}
 		if (t instanceof HazelcastOverloadException) {
-			LOGGER.error("Failed to invoke operation. System is currently overloaded.  Sending Failure.");
-			return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
+			LOGGER.error("Failed to invoke operation. System is currently overloaded.  Sending Failure and closing connection.");
+			return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), MemcacheUtils.INTERNAL_ERROR, true, t.getMessage()).send(ctx);
 		}
 		if (t instanceof HazelcastException) {
-			LOGGER.error("Hazelcast Failed to handle the request.  Sending Failure response.");
-			return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), (short) 0x0084, t.getMessage()).send(ctx);
+			LOGGER.error("Hazelcast Failed to handle the request.  Sending Failure response and closing connection.");
+			return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), MemcacheUtils.INTERNAL_ERROR, true, t.getMessage()).send(ctx);
 		}
-		return CompletedFuture.INSTANCE;
+		LOGGER.warn("Error executing operations.  Closing Connection: opcode={}", opcode, t);
+		return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), MemcacheUtils.INTERNAL_ERROR, true, t.getMessage()).send(ctx);
 	}
 
 	@Override
@@ -142,7 +140,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					LogUtils.setupChannelMdc(channelId);
 					try {
 						if (value == null && opcode == nonQuietOpcode) {
-							MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT,
+							MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.KEY_ENOENT, false,
 									"Unable to find Key: " + key).send(ctx);
 							return;
 						} else if (value == null) {
@@ -178,6 +176,8 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 						if (LOGGER.isDebugEnabled()) {
 							LOGGER.debug("Current Socket: {} Flushed response for key: {}", ctx.channel().id(), key);
 						}
+					} catch (Exception e) {
+						handleException(ctx, e);
 					} finally {
 						LogUtils.cleanupChannelMdc();
 					}
@@ -216,32 +216,36 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> set(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		return processSetAddReplaceRequest(request);
+		return processSetAddReplaceRequest(ctx, request);
 	}
 
-	private Future<?> processSetAddReplaceRequest(BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
+	private Future<?> processSetAddReplaceRequest(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
+		try {
+			MemcacheUtils.logRequest(request);
 
-		int valueSize = request.totalBodyLength() - Short.toUnsignedInt(request.keyLength())
-				- Byte.toUnsignedInt(request.extrasLength());
-		if (valueSize > maxValueSize) {
-			failureResponse = MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.E2BIG,
-					"Value too big.  Max Value is " + maxValueSize);
+			int valueSize = request.totalBodyLength() - Short.toUnsignedInt(request.keyLength())
+					- Byte.toUnsignedInt(request.extrasLength());
+			if (valueSize > maxValueSize) {
+				failureResponse = MemcacheUtils.returnFailure(opcode, opaque, BinaryMemcacheResponseStatus.E2BIG, false,
+						"Value too big.  Max Value is " + maxValueSize);
+			}
+			ByteBuf extras = request.extras();
+			ByteBuf flagSlice = extras.slice(0, 4);
+			long expiration = extras.getUnsignedInt(4);
+			cacheValue = new HazelcastMemcacheCacheValue(valueSize, flagSlice, expiration);
+			long currentTimeInSeconds = System.currentTimeMillis() / 1000;
+			if (expiration <= MAX_EXPIRATION_SEC) {
+				expirationInSeconds = expiration;
+			} else if (expiration > currentTimeInSeconds) {
+				expirationInSeconds = expiration - currentTimeInSeconds;
+			} else {
+				failureResponse = MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED, false,
+						"Expiration is in the past.");
+			}
+			return null;
+		} catch (Exception e) {
+			return handleException(ctx, e);
 		}
-		ByteBuf extras = request.extras();
-		ByteBuf flagSlice = extras.slice(0, 4);
-		long expiration = extras.getUnsignedInt(4);
-		cacheValue = new HazelcastMemcacheCacheValue(valueSize, flagSlice, expiration);
-		long currentTimeInSeconds = System.currentTimeMillis() / 1000;
-		if (expiration <= MAX_EXPIRATION_SEC) {
-			expirationInSeconds = expiration;
-		} else if (expiration > currentTimeInSeconds) {
-			expirationInSeconds = expiration - currentTimeInSeconds;
-		} else {
-			failureResponse = MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED,
-					"Expiration is in the past.");
-		}
-		return null;
 	}
 
 	@Override
@@ -277,9 +281,11 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 									MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
 								}
 							} else {
-								MemcacheUtils.returnFailure(opcode, opaque, response.getCode(), response.getMsg())
+								MemcacheUtils.returnFailure(opcode, opaque, response.getCode(), false, response.getMsg())
 										.send(ctx);
 							}
+						} catch (Exception e) {
+							handleException(ctx, e);
 						} finally {
 							LogUtils.cleanupChannelMdc();
 						}
@@ -307,7 +313,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> add(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		return processSetAddReplaceRequest(request);
+		return processSetAddReplaceRequest(ctx, request);
 	}
 
 	@Override
@@ -317,7 +323,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> replace(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		return processSetAddReplaceRequest(request);
+		return processSetAddReplaceRequest(ctx, request);
 	}
 
 	@Override
@@ -343,11 +349,13 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 							MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
 						} else if (!response.booleanValue()) {
 							MemcacheUtils
-									.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, "Entry not found.")
+									.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, false, "Entry not found.")
 									.send(ctx);
 						} else {
 							MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
 						}
+					} catch (Exception e) {
+						handleException(ctx, e);
 					} finally {
 						LogUtils.cleanupChannelMdc();
 					}
@@ -386,7 +394,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			long currentTimeInSeconds = System.currentTimeMillis() / 1000;
 			long initialValue = extras.slice(8, 8).readLong();
 			if (expiration == MAX_EXPIRATION) {
-				return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT,
+				return MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.KEY_ENOENT, false,
 						"Expiration is MAX Value.  Not allowed according to spec for some reason.").send(ctx);
 			}
 			if (expiration <= MAX_EXPIRATION_SEC) {
@@ -395,7 +403,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				expirationInSeconds = expiration - currentTimeInSeconds;
 			} else {
 				return MemcacheUtils
-						.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED, "Expiration is in the past.")
+						.returnFailure(request, BinaryMemcacheResponseStatus.NOT_STORED, false, "Expiration is in the past.")
 						.send(ctx);
 			}
 			IExecutorService executor = getExecutor();
@@ -410,7 +418,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					LogUtils.setupChannelMdc(channelId);
 					try {
 						if (!msg.isSuccess()) {
-							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), false, msg.getMsg()).send(ctx);
 							return;
 						}
 						if (opcode == BinaryMemcacheOpcodes.INCREMENT || opcode == BinaryMemcacheOpcodes.DECREMENT) {
@@ -425,6 +433,8 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 						} else {
 							MemcacheUtils.returnQuiet(request.opcode(), request.opaque()).send(ctx);
 						}
+					} catch (Exception e) {
+						handleException(ctx, e);
 					} finally {
 						LogUtils.cleanupChannelMdc();
 					}
@@ -453,11 +463,16 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> quit(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-		if (request.opcode() == BinaryMemcacheOpcodes.QUIT) {
-			MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+		try {
+			MemcacheUtils.logRequest(request);
+			if (request.opcode() == BinaryMemcacheOpcodes.QUIT) {
+				return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx)
+						.addListener(ChannelFutureListener.CLOSE);
+			}
+			return ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
+		} catch (Exception e) {
+			return handleException(ctx, e);
 		}
-		return ctx.channel().close().addListener(FAILURE_LOGGING_LISTENER);
 	}
 
 	@Override
@@ -476,14 +491,22 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 
 	@Override
 	public Future<?> noop(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+		try {
+			MemcacheUtils.logRequest(request);
+			return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, null).send(ctx);
+		} catch (Exception e) {
+			return handleException(ctx, e);
+		}
 	}
 
 	@Override
 	public Future<?> version(ChannelHandlerContext ctx, BinaryMemcacheRequest request) {
-		MemcacheUtils.logRequest(request);
-		return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, "CF Memcache 2.0").send(ctx);
+		try {
+			MemcacheUtils.logRequest(request);
+			return MemcacheUtils.returnSuccess(request.opcode(), request.opaque(), 0, "CF Memcache 2.0").send(ctx);
+		} catch (Exception e) {
+			return handleException(ctx, e);
+		}
 	}
 
 	private Future<?> appendPrepend(BinaryMemcacheRequest request) {
@@ -493,7 +516,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 				- Byte.toUnsignedInt(request.extrasLength());
 
 		if (valueSize > maxValueSize) {
-			failureResponse = MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG,
+			failureResponse = MemcacheUtils.returnFailure(request, BinaryMemcacheResponseStatus.E2BIG, false,
 					"Value too big.  Max Value is " + maxValueSize);
 		}
 		cacheValue = new HazelcastMemcacheCacheValue(valueSize, Unpooled.EMPTY_BUFFER, 0);
@@ -522,13 +545,15 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 						LogUtils.setupChannelMdc(channelId);
 						try {
 							if (!msg.isSuccess()) {
-								MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+								MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), false, msg.getMsg()).send(ctx);
 							}
 							if (opcode == BinaryMemcacheOpcodes.APPEND || opcode == BinaryMemcacheOpcodes.PREPEND) {
 								MemcacheUtils.returnSuccess(opcode, opaque, msg.getCas(), null).send(ctx);
 							} else {
 								MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
 							}
+						} catch (Exception e) {
+							handleException(ctx, e);
 						} finally {
 							LogUtils.cleanupChannelMdc();
 						}
@@ -682,16 +707,20 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 	}
 
 	private void sendStat(ChannelHandlerContext ctx, int opaque, byte[] key, String value) {
-		if (value == null) {
-			return;
+		try {
+			if (value == null) {
+				return;
+			}
+			FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(Unpooled.wrappedBuffer(key),
+					null, Unpooled.wrappedBuffer(value.getBytes()));
+			response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
+			response.setOpcode(opcode);
+			response.setOpaque(opaque);
+			response.setTotalBodyLength(key.length + value.length());
+			MemcacheUtils.writeAndFlush(ctx, response);
+		} catch (Exception e) {
+			handleException(ctx, e);
 		}
-		FullBinaryMemcacheResponse response = new DefaultFullBinaryMemcacheResponse(Unpooled.wrappedBuffer(key), null,
-				Unpooled.wrappedBuffer(value.getBytes()));
-		response.setStatus(BinaryMemcacheResponseStatus.SUCCESS);
-		response.setOpcode(opcode);
-		response.setOpaque(opaque);
-		response.setTotalBodyLength(key.length + value.length());
-		MemcacheUtils.writeAndFlush(ctx, response);
 	}
 
 	@Override
@@ -710,10 +739,12 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 					LogUtils.setupChannelMdc(channelId);
 					try {
 						if (!msg.isSuccess()) {
-							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+							MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), false, msg.getMsg()).send(ctx);
 							return;
 						}
 						MemcacheUtils.returnSuccess(opcode, opaque, 0, null).send(ctx);
+					} catch (Exception e) {
+						handleException(ctx, e);
 					} finally {
 						LogUtils.cleanupChannelMdc();
 					}
@@ -756,7 +787,7 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 											|| opcode == BinaryMemcacheOpcodes.GATKQ)) {
 								MemcacheUtils.returnQuiet(opcode, opaque).send(ctx);
 							} else {
-								MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), msg.getMsg()).send(ctx);
+								MemcacheUtils.returnFailure(opcode, opaque, msg.getCode(), false, msg.getMsg()).send(ctx);
 							}
 							return;
 						}
@@ -786,6 +817,8 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 							response.setTotalBodyLength(responseFlags.capacity() + responseValue.capacity());
 						}
 						MemcacheUtils.writeAndFlush(ctx, response);
+					} catch (Exception e) {
+						handleException(ctx, e);
 					} finally {
 						LogUtils.cleanupChannelMdc();
 					}
