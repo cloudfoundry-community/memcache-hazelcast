@@ -2,6 +2,7 @@ package cloudfoundry.memcache;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheMessage;
 import io.netty.handler.codec.memcache.binary.BinaryMemcacheRequest;
@@ -14,16 +15,21 @@ import org.slf4j.LoggerFactory;
 
 public final class MemcacheUtils {
 
+	public static final short INTERNAL_ERROR = (short)0x0084;
+	public static final short TEMPORARY_FAILURE = (short)0x0086;
+
 	private MemcacheUtils() {
 	}
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(MemcacheUtils.class);
 
-	public static ResponseSender returnFailure(BinaryMemcacheRequest request, short errorCode, String message) {
-		return returnFailure(request.opcode(), request.opaque(), errorCode, message);
+	public static ResponseSender returnFailure(BinaryMemcacheRequest request, short errorCode, boolean forceClose,
+			String message) {
+		return returnFailure(request.opcode(), request.opaque(), errorCode, forceClose, message);
 	}
 
-	public static ResponseSender returnFailure(byte opcode, int opaque, short errorCode, String message) {
+	public static ResponseSender returnFailure(byte opcode, int opaque, short errorCode, boolean forceClose,
+			String message) {
 		return ctx -> {
 			FullBinaryMemcacheResponse response;
 			response = new DefaultFullBinaryMemcacheResponse(null, null,
@@ -32,7 +38,11 @@ public final class MemcacheUtils {
 			response.setOpaque(opaque);
 			response.setOpcode(opcode);
 			response.setTotalBodyLength(message.length());
-			return MemcacheUtils.writeAndFlush(ctx, response);
+			ChannelFuture future = MemcacheUtils.writeAndFlushRaw(ctx, response);
+			if (forceClose  || errorCode == INTERNAL_ERROR) {
+				return future.addListener(ChannelFutureListener.CLOSE);
+			}
+			return future.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 		};
 	}
 
@@ -53,15 +63,24 @@ public final class MemcacheUtils {
 	}
 
 	public static ResponseSender returnQuiet(byte opcode, int opaque) {
-		return ctx -> MemcacheUtils.writeAndFlush(ctx, new QuietResponse(opcode, opaque));
+		return ctx -> MemcacheUtils.writeAndFlushRaw(ctx, new QuietResponse(opcode, opaque))
+				.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
 	}
 
-	public static ChannelFuture writeAndFlush(ChannelHandlerContext ctx, BinaryMemcacheMessage msg) {
+	private static ChannelFuture writeAndFlushRaw(ChannelHandlerContext ctx, BinaryMemcacheMessage msg) {
 		if (ctx.channel().isOpen() && ctx.channel().isActive()) {
 			return ctx.channel().writeAndFlush(msg.retain());
 		}
 		throw new IllegalStateException("Channel was not open or active.  Not able to write msg.");
 	}
+	
+	public static ChannelFuture writeAndFlush(ChannelHandlerContext ctx, BinaryMemcacheMessage msg) {
+		if (ctx.channel().isOpen() && ctx.channel().isActive()) {
+			return ctx.channel().writeAndFlush(msg.retain()).addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
+		}
+		throw new IllegalStateException("Channel was not open or active.  Not able to write msg.");
+	}
+
 
 	public static void logRequest(BinaryMemcacheRequest request) {
 		if (LOGGER.isDebugEnabled()) {

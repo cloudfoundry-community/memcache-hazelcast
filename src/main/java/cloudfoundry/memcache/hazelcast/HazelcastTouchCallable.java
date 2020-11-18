@@ -1,25 +1,29 @@
 package cloudfoundry.memcache.hazelcast;
 
-import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
-
-import java.io.IOException;
-import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
-
+import cloudfoundry.memcache.MemcacheUtils;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.HazelcastInstanceAware;
 import com.hazelcast.core.IMap;
 import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
+import io.netty.handler.codec.memcache.binary.BinaryMemcacheResponseStatus;
+import java.io.IOException;
+import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class HazelcastTouchCallable implements HazelcastInstanceAware, Callable<HazelcastMemcacheMessage>, IdentifiedDataSerializable {
-	private transient HazelcastInstance instance;
+public class HazelcastTouchCallable
+		implements HazelcastInstanceAware, Callable<HazelcastMemcacheMessage>, IdentifiedDataSerializable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(HazelcastTouchCallable.class);
+	private HazelcastInstance instance;
 	private String cacheName;
 	private byte[] key;
 	private long expiration;
 
-	public HazelcastTouchCallable() {	}
+	public HazelcastTouchCallable() {
+	}
 
 	public HazelcastTouchCallable(String cacheName, byte[] key, long expiration) {
 		this.cacheName = cacheName;
@@ -27,40 +31,52 @@ public class HazelcastTouchCallable implements HazelcastInstanceAware, Callable<
 		this.expiration = expiration;
 	}
 
-
 	@Override
 	public HazelcastMemcacheMessage call() {
-		IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
-
-		long currentTimeInSeconds = System.currentTimeMillis() / 1000;
-		long expirationInSeconds;
-		if (expiration <= HazelcastMemcacheMsgHandler.MAX_EXPIRATION_SEC) {
-			expirationInSeconds = expiration;
-		} else if (expiration > currentTimeInSeconds) {
-			expirationInSeconds = expiration - currentTimeInSeconds;
-		} else {
-			cache.remove(key);
-			return new HazelcastMemcacheMessage(true);
-		}
-
 		try {
-			cache.lock(key);
-			HazelcastMemcacheCacheValue value = cache.get(key);
+			IMap<byte[], HazelcastMemcacheCacheValue> cache = getCache();
 
-			if (value == null) {
-				return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.KEY_ENOENT, "Unable to find Key: " + key);
-			}
-			if (value.getExpiration() == expiration) {
-				cache.set(key, value, expirationInSeconds, TimeUnit.SECONDS);
+			long currentTimeInSeconds = System.currentTimeMillis() / 1000;
+			long expirationInSeconds;
+			if (expiration <= HazelcastMemcacheMsgHandler.MAX_EXPIRATION_SEC) {
+				expirationInSeconds = expiration;
+			} else if (expiration > currentTimeInSeconds) {
+				expirationInSeconds = expiration - currentTimeInSeconds;
 			} else {
-				HazelcastMemcacheCacheValue newValue = new HazelcastMemcacheCacheValue(value.getValueLength(), value.getFlags(), expiration);
-				newValue.writeValue(value.getValue());
-				cache.set(key, newValue, expirationInSeconds, TimeUnit.SECONDS);
+				cache.remove(key);
+				return new HazelcastMemcacheMessage(true);
 			}
-		} finally {
-			cache.unlock(key);
+
+			if (cache.tryLock(key, 1, TimeUnit.SECONDS, 1, TimeUnit.SECONDS)) {
+				try {
+					HazelcastMemcacheCacheValue value = cache.get(key);
+
+					if (value == null) {
+						return new HazelcastMemcacheMessage(false, BinaryMemcacheResponseStatus.KEY_ENOENT,
+								"Unable to find Key: " + key);
+					}
+					if (value.getExpiration() == expiration) {
+						cache.set(key, value, expirationInSeconds, TimeUnit.SECONDS);
+					} else {
+						HazelcastMemcacheCacheValue newValue = new HazelcastMemcacheCacheValue(value.getValueLength(),
+								value.getFlags(), expiration);
+						newValue.writeValue(value.getValue());
+						cache.set(key, newValue, expirationInSeconds, TimeUnit.SECONDS);
+					}
+					return new HazelcastMemcacheMessage(true);
+				} finally {
+					cache.unlock(key);
+				}
+			} else {
+				return new HazelcastMemcacheMessage(false, MemcacheUtils.INTERNAL_ERROR, "Failed to aquire lock on key.");
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return new HazelcastMemcacheMessage(false, MemcacheUtils.INTERNAL_ERROR, "Thread interrupted.");
+		} catch (Exception e) {
+			LOGGER.error("Unexpected Error:", e);
+			return new HazelcastMemcacheMessage(false, MemcacheUtils.INTERNAL_ERROR, "Unexpected Error.  Message: " + e.getMessage());
 		}
-		return new HazelcastMemcacheMessage(true);
 	}
 
 	public IMap<byte[], HazelcastMemcacheCacheValue> getCache() {
