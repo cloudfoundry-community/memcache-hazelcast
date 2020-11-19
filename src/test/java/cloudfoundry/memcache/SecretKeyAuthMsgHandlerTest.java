@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.memcache.DefaultMemcacheContent;
 import io.netty.handler.codec.memcache.MemcacheContent;
@@ -41,6 +42,7 @@ public class SecretKeyAuthMsgHandlerTest {
 		Channel channelMock = EasyMock.createNiceMock(Channel.class);
 		EasyMock.expect(channelMock.isOpen()).andReturn(true).anyTimes();
 		EasyMock.expect(channelMock.isActive()).andReturn(true).anyTimes();
+		EasyMock.expect(channelMock.writeAndFlush(EasyMock.anyObject())).andReturn(EasyMock.createNiceMock(ChannelFuture.class)).anyTimes();
 		EasyMock.replay(channelMock);
 		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
@@ -70,6 +72,7 @@ public class SecretKeyAuthMsgHandlerTest {
 		Channel channelMock = EasyMock.createNiceMock(Channel.class);
 		EasyMock.expect(channelMock.isOpen()).andReturn(true).anyTimes();
 		EasyMock.expect(channelMock.isActive()).andReturn(true).anyTimes();
+		EasyMock.expect(channelMock.writeAndFlush(EasyMock.anyObject())).andReturn(EasyMock.createNiceMock(ChannelFuture.class)).anyTimes();
 		EasyMock.replay(channelMock);
 		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
@@ -96,6 +99,7 @@ public class SecretKeyAuthMsgHandlerTest {
 		Channel channelMock = EasyMock.createNiceMock(Channel.class);
 		EasyMock.expect(channelMock.isOpen()).andReturn(true).anyTimes();
 		EasyMock.expect(channelMock.isActive()).andReturn(true).anyTimes();
+		EasyMock.expect(channelMock.writeAndFlush(EasyMock.anyObject())).andReturn(EasyMock.createNiceMock(ChannelFuture.class)).anyTimes();
 		EasyMock.replay(channelMock);
 		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
@@ -121,6 +125,7 @@ public class SecretKeyAuthMsgHandlerTest {
 		Channel channelMock = EasyMock.createNiceMock(Channel.class);
 		EasyMock.expect(channelMock.isOpen()).andReturn(true).anyTimes();
 		EasyMock.expect(channelMock.isActive()).andReturn(true).anyTimes();
+		EasyMock.expect(channelMock.writeAndFlush(EasyMock.anyObject())).andReturn(EasyMock.createNiceMock(ChannelFuture.class)).anyTimes();
 		EasyMock.replay(channelMock);
 		EasyMock.expect(ctxMock.channel()).andReturn(channelMock).anyTimes();
 		EasyMock.replay(ctxMock);
