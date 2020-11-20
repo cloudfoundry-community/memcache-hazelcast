@@ -25,6 +25,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.LongAdder;
+import org.apache.commons.lang.math.RandomUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,9 +80,9 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		this.memcacheStats = memcacheStats;
 		this.requestQueue = new ArrayDeque<>(queueSizeLimit + 100);
 		this.userLimitReporter = msgHandlerFactory.getScheduledExecutorService().scheduleAtFixedRate(rateLimitLogger,
-				RATE_LIMIT_LOG_INTERVAL.toMillis(), RATE_LIMIT_LOG_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
+				RandomUtils.nextInt((int)RATE_LIMIT_LOG_INTERVAL.toMillis()), RATE_LIMIT_LOG_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
 		this.connectionStatisticsReporter = msgHandlerFactory.getScheduledExecutorService().scheduleAtFixedRate(
-				connectionStatisticsLogger, CONNECTION_STATISTICS_LOG_INTERVAL.toMillis(),
+				connectionStatisticsLogger, RandomUtils.nextInt((int)CONNECTION_STATISTICS_LOG_INTERVAL.toMillis()),
 				CONNECTION_STATISTICS_LOG_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
 		this.authCompleteListener = future -> {
 			LogUtils.setupChannelMdc(channelId);
