@@ -87,10 +87,10 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			LogUtils.setupChannelMdc(channelId);
 			try {
 				if (getAuthMsgHandler() != null && getAuthMsgHandler().isAuthenticated()) {
-					LOGGER.info("Connection Authenticated: user={}", getAuthMsgHandler().getUsername());
+					LOGGER.info("Connection Authenticated: user=\"{}\"", getAuthMsgHandler().getUsername());
 				} else {
 					if (getAuthMsgHandler() != null) {
-						LOGGER.warn("Connection Authentication FAILED: user={}", getAuthMsgHandler().getUsername());
+						LOGGER.warn("Connection Authentication FAILED: user=\"{}\"", getAuthMsgHandler().getUsername());
 					} else {
 						LOGGER.warn("Connection Authentication FAILED");
 					}
@@ -559,7 +559,7 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 			LogUtils.setupChannelMdc(channelId);
 			try {
 				long total = requests.sum();
-				LOGGER.info("Statistics: user={} requestDelta={} queueSize={}", getCurrentUser(),
+				LOGGER.info("Statistics: user=\"{}\" requestDelta={} queueSize={}", getCurrentUser(),
 						total - requestsLastReport, requestQueue.size());
 				requestsLastReport = total;
 			} finally {
@@ -582,14 +582,14 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 		@Override
 		public void run() {
 			if (triggeredRequestRateLimit) {
-				LOGGER.warn("Requests are being rate limited at requests/10sec: rate={} pause={}ms user={}",
+				LOGGER.warn("Requests are being rate limited at requests/10sec: rate={} pause={}ms user=\"{}\"",
 						triggeredRequestLimitRate, triggeredRequestLimitDuration, getCurrentUser());
 				triggeredRequestLimitRate = 0;
 				triggeredRequestLimitDuration = 0;
 				triggeredRequestRateLimit = false;
 			}
 			if (triggeredQueueLimit) {
-				LOGGER.warn("Queue is being rate limited: size={} user={}", triggeredQueueSize, getCurrentUser());
+				LOGGER.warn("Queue is being rate limited: size={} user=\"{}\"", triggeredQueueSize, getCurrentUser());
 				triggeredQueueLimit = false;
 				triggeredQueueSize = 0;
 			}
