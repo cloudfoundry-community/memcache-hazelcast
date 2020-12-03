@@ -117,7 +117,11 @@ public class HazelcastMemcacheMsgHandler implements MemcacheMsgHandler {
 			LOGGER.error("Hazelcast Failed to handle the request.  Sending Failure response and closing connection.");
 			return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), MemcacheUtils.INTERNAL_ERROR, true, t.getMessage()).send(ctx);
 		}
-		LOGGER.warn("Error executing operations.  Closing Connection: opcode={}", opcode, t);
+		if (t instanceof IllegalStateException) {
+			LOGGER.error("Connection is in an invalid state.  Closing Connection: opcode={} msg={}", opcode, t.getMessage());
+			return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), MemcacheUtils.INTERNAL_ERROR, true, t.getMessage()).send(ctx);
+		}
+		LOGGER.error("Error executing operations.  Closing Connection: opcode={}", opcode, t);
 		return MemcacheUtils.returnFailure(getOpcode(), getOpaque(), MemcacheUtils.INTERNAL_ERROR, true, t.getMessage()).send(ctx);
 	}
 

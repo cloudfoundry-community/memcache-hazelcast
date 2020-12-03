@@ -507,7 +507,10 @@ public class MemcacheInboundHandlerAdapter extends ChannelDuplexHandler {
 							(byte) 99, cause);
 				} else if (cause != null && cause.getMessage() != null
 						&& cause.getMessage().contains("Connection reset")) {
-					LOGGER.warn("Connection unexpectedly reset.");
+					LOGGER.warn(cause.getMessage());
+				} else if (cause != null && cause.getMessage() != null
+						&& cause.getMessage().contains("Connection timed out")) {
+					LOGGER.warn(cause.getMessage());
 				} else if (isAnyCauseInstanceOf(cause, IllegalStateException.class)) {
 					LOGGER.warn("Connection in unknown state. msg={}", cause.getMessage());
 				} else {

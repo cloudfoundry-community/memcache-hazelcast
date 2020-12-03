@@ -39,7 +39,7 @@ public final class MemcacheUtils {
 			response.setOpcode(opcode);
 			response.setTotalBodyLength(message.length());
 			ChannelFuture future = MemcacheUtils.writeAndFlushRaw(ctx, response);
-			if (forceClose  || errorCode == INTERNAL_ERROR) {
+			if (forceClose || errorCode == INTERNAL_ERROR) {
 				return future.addListener(ChannelFutureListener.CLOSE);
 			}
 			return future.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
