@@ -60,7 +60,7 @@
 		<dependency>
 			<groupId>com.github.cloudfoundry-community</groupId>
 			<artifactId>snotel-spring-boot-config</artifactId>
-			<version>0.4</version>
+			<version>0.5</version>
 		</dependency>
 		<dependency>
 			<groupId>net.spy</groupId>
